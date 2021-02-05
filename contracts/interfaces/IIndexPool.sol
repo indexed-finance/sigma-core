@@ -80,8 +80,6 @@ interface IIndexPool {
     address unbindHandler
   ) external;
 
-  function setMaxPoolTokens(uint256 maxPoolTokens) external;
-
   function setSwapFee(uint256 swapFee) external;
 
   function delegateCompLikeToken(address token, address delegatee) external;
@@ -158,8 +156,6 @@ interface IIndexPool {
   function getSwapFee() external view returns (uint256/* swapFee */);
 
   function getController() external view returns (address);
-
-  function getMaxPoolTokens() external view returns (uint256);
 
   function isBound(address t) external view returns (bool);
 
