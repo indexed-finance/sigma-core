@@ -855,7 +855,7 @@ describe('IndexPool.sol', async () => {
       await indexPool.exitPool(toWei(poolAmountIn), [0, 0, 0]);
       const currentPoolBalance = await indexPool.totalSupply();
       const poolSupplyDiff = previousPoolBalance.sub(currentPoolBalance);
-      expect(+calcRelativeDiff(1, fromWei(poolSupplyDiff))).to.be.lte(errorDelta);
+      expect(+calcRelativeDiff(0.995, fromWei(poolSupplyDiff))).to.be.lte(errorDelta);
       for (let i = 0; i < tokens.length; i++) {
         const previousTokenBalance = balances[i];
         const currentTokenBalance = await indexPool.getBalance(tokens[i]);
