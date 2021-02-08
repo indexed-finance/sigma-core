@@ -138,7 +138,7 @@ describe('IndexPool.sol', async () => {
     setupTests();
 
     it('Reverts if the pool is already initialized', async () => {
-      await verifyRevert('initialize', /ERR_INITIALIZED/g, [], [], [], zeroAddress, zeroAddress);
+      await verifyRevert('initialize', /ERR_INITIALIZED/g, [], [], [], zeroAddress, zeroAddress, zeroAddress);
     });
     
     it('Reverts if array lengths do not match', async () => {
@@ -150,9 +150,9 @@ describe('IndexPool.sol', async () => {
         await token.getFreeTokens(from, balances[i]);
         await token.approve(pool.address, balances[i]);
       }
-      await verifyRejection(pool, 'initialize', /ERR_ARR_LEN/g, tokens, [zero, zero], denormalizedWeights, zeroAddress, zeroAddress);
-      await verifyRejection(pool, 'initialize', /ERR_ARR_LEN/g, tokens, balances, [zero, zero], zeroAddress, zeroAddress);
-      await verifyRejection(pool, 'initialize', /ERR_ARR_LEN/g, [zeroAddress, zeroAddress], balances, denormalizedWeights, zeroAddress, zeroAddress);
+      await verifyRejection(pool, 'initialize', /ERR_ARR_LEN/g, tokens, [zero, zero], denormalizedWeights, zeroAddress, zeroAddress, zeroAddress);
+      await verifyRejection(pool, 'initialize', /ERR_ARR_LEN/g, tokens, balances, [zero, zero], zeroAddress, zeroAddress, zeroAddress);
+      await verifyRejection(pool, 'initialize', /ERR_ARR_LEN/g, [zeroAddress, zeroAddress], balances, denormalizedWeights, zeroAddress, zeroAddress, zeroAddress);
     });
 
     it('Reverts if less than 2 tokens are provided', async () => {
@@ -163,6 +163,7 @@ describe('IndexPool.sol', async () => {
         [zeroAddress],
         [zero],
         [zero],
+        zeroAddress,
         zeroAddress,
         zeroAddress
       );
@@ -177,6 +178,7 @@ describe('IndexPool.sol', async () => {
         new Array(11).fill(zero),
         new Array(11).fill(zero),
         zeroAddress,
+        zeroAddress,
         zeroAddress
       );
     });
@@ -184,20 +186,20 @@ describe('IndexPool.sol', async () => {
     it('Reverts if any denorm < MIN_WEIGHT', async () => {
       const _denorms = new Array(tokens.length).fill(toWei(1));
       _denorms[_denorms.length - 1] = zero;
-      await verifyRejection(pool, 'initialize', /ERR_MIN_WEIGHT/g, tokens, balances, _denorms, from, zeroAddress);
+      await verifyRejection(pool, 'initialize', /ERR_MIN_WEIGHT/g, tokens, balances, _denorms, from, zeroAddress, from);
     });
     
     it('Reverts if any denorm > MAX_WEIGHT', async () => {
       // const _denorms = [toWei(12), toWei(12), toWei(100)];
       const _denorms = new Array(tokens.length).fill(toWei(1));
       _denorms[_denorms.length - 1] = toWei(100);
-      await verifyRejection(pool, 'initialize', /ERR_MAX_WEIGHT/g, tokens, balances, _denorms, from, zeroAddress);
+      await verifyRejection(pool, 'initialize', /ERR_MAX_WEIGHT/g, tokens, balances, _denorms, from, zeroAddress, from);
     });
     
     it('Reverts if any balance < MIN_BALANCE', async () => {
       const bals = new Array(tokens.length).fill(toWei(1));
       bals[bals.length - 1] = zero;
-      await verifyRejection(pool, 'initialize', /ERR_MIN_BALANCE/g, tokens, bals, denormalizedWeights, from, zeroAddress);
+      await verifyRejection(pool, 'initialize', /ERR_MIN_BALANCE/g, tokens, bals, denormalizedWeights, from, zeroAddress, from);
     });
 
     it('Reverts if total weight > maximum', async () => {
@@ -206,7 +208,7 @@ describe('IndexPool.sol', async () => {
       const _denorms = new Array(len).fill(dn);
       _denorms[_denorms.length - 1] = dn.mul(2);
       //[toWei(12), toWei(12), toWei(12)];
-      await verifyRejection(pool, 'initialize', /ERR_MAX_TOTAL_WEIGHT/g, tokens, balances, _denorms, from, zeroAddress);
+      await verifyRejection(pool, 'initialize', /ERR_MAX_TOTAL_WEIGHT/g, tokens, balances, _denorms, from, zeroAddress, from);
     });
   });
 
@@ -234,7 +236,8 @@ describe('IndexPool.sol', async () => {
         [toWei(100), toWei(100)],
         [toWei(12.5), toWei(12.5)],
         from,
-        handler.address
+        handler.address,
+        from
       );
     });
   

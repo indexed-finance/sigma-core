@@ -12,7 +12,7 @@ describe('IndexPool.sol', async () => {
   let getPoolData, verifyRevert, mintAndApprove, wrappedTokens;
   let tokens, balances, denormalizedWeights, normalizedWeights;
   let newToken;
-  let from;
+  let from, feeRecipient;
   let lastDenormUpdate;
 
   const setupTests = () => {
@@ -27,7 +27,8 @@ describe('IndexPool.sol', async () => {
         from,
         lastDenormUpdate,
         verifyRevert,
-        nonOwnerFaker
+        nonOwnerFaker,
+        feeRecipient
       } = await deployments.createFixture(poolFixture)());
       await updateData();
     });
@@ -78,7 +79,26 @@ describe('IndexPool.sol', async () => {
       const controllerAddress = await indexPool.getController();
       expect(controllerAddress).to.eq(from)
     });
+
+    it('getExitFeeRecipient()', async () => {
+      const exitFeeRecipient = await indexPool.getExitFeeRecipient();
+      expect(exitFeeRecipient).to.eq(feeRecipient);
+    })
   });
+
+  describe('setExitFeeRecipient', async () => {
+    setupTests();
+
+    it('Reverts if not called by current fee recipient', async () => {
+      await verifyRejection(indexPool, 'setExitFeeRecipient', /ERR_NOT_FEE_RECIPIENT/g, zeroAddress)
+    })
+
+    it('Updates the fee recipient', async () => {
+      const [, feeRecipientSigner] = await ethers.getSigners()
+      await indexPool.connect(feeRecipientSigner).setExitFeeRecipient(zeroAddress);
+      expect(await indexPool.getExitFeeRecipient()).to.eq(zeroAddress)
+    })
+  })
 
   describe('Control & Public', async () => {
     it('Functions with _control_ role are only callable by controller', async () => {
@@ -129,7 +149,7 @@ describe('IndexPool.sol', async () => {
     setupTests();
 
     it('Reverts if the pool is already initialized', async () => {
-      await verifyRevert('initialize', /ERR_INITIALIZED/g, [], [], [], zeroAddress, zeroAddress);
+      await verifyRevert('initialize', /ERR_INITIALIZED/g, [], [], [], zeroAddress, zeroAddress, zeroAddress);
     });
     
     it('Reverts if array lengths do not match', async () => {
@@ -141,9 +161,9 @@ describe('IndexPool.sol', async () => {
         await token.getFreeTokens(from, balances[i]);
         await token.approve(pool.address, balances[i]);
       }
-      await verifyRejection(pool, 'initialize', /ERR_ARR_LEN/g, tokens, [zero, zero], denormalizedWeights, zeroAddress, zeroAddress);
-      await verifyRejection(pool, 'initialize', /ERR_ARR_LEN/g, tokens, balances, [zero, zero], zeroAddress, zeroAddress);
-      await verifyRejection(pool, 'initialize', /ERR_ARR_LEN/g, [zeroAddress, zeroAddress], balances, denormalizedWeights, zeroAddress, zeroAddress);
+      await verifyRejection(pool, 'initialize', /ERR_ARR_LEN/g, tokens, [zero, zero], denormalizedWeights, zeroAddress, zeroAddress, zeroAddress);
+      await verifyRejection(pool, 'initialize', /ERR_ARR_LEN/g, tokens, balances, [zero, zero], zeroAddress, zeroAddress, zeroAddress);
+      await verifyRejection(pool, 'initialize', /ERR_ARR_LEN/g, [zeroAddress, zeroAddress], balances, denormalizedWeights, zeroAddress, zeroAddress, zeroAddress);
     });
 
     it('Reverts if less than 2 tokens are provided', async () => {
@@ -154,6 +174,7 @@ describe('IndexPool.sol', async () => {
         [zeroAddress],
         [zero],
         [zero],
+        zeroAddress,
         zeroAddress,
         zeroAddress
       );
@@ -168,27 +189,28 @@ describe('IndexPool.sol', async () => {
         new Array(11).fill(zero),
         new Array(11).fill(zero),
         zeroAddress,
+        zeroAddress,
         zeroAddress
       );
     });
     
     it('Reverts if any denorm < MIN_WEIGHT', async () => {
       const _denorms = [toWei(12), toWei(12), zero];
-      await verifyRejection(pool, 'initialize', /ERR_MIN_WEIGHT/g, tokens, balances, _denorms, from, zeroAddress);
+      await verifyRejection(pool, 'initialize', /ERR_MIN_WEIGHT/g, tokens, balances, _denorms, from, zeroAddress, from);
     });
     
     it('Reverts if any denorm > MAX_WEIGHT', async () => {
       const _denorms = [toWei(12), toWei(12), toWei(100)];
-      await verifyRejection(pool, 'initialize', /ERR_MAX_WEIGHT/g, tokens, balances, _denorms, from, zeroAddress);
+      await verifyRejection(pool, 'initialize', /ERR_MAX_WEIGHT/g, tokens, balances, _denorms, from, zeroAddress, from);
     });
     
     it('Reverts if any balance < MIN_BALANCE', async () => {
-      await verifyRejection(pool, 'initialize', /ERR_MIN_BALANCE/g, tokens, [zero, zero, zero], denormalizedWeights, from, zeroAddress);
+      await verifyRejection(pool, 'initialize', /ERR_MIN_BALANCE/g, tokens, [zero, zero, zero], denormalizedWeights, from, zeroAddress, from);
     });
 
     it('Reverts if total weight > maximum', async () => {
       const _denorms = [toWei(12), toWei(12), toWei(12)];
-      await verifyRejection(pool, 'initialize', /ERR_MAX_TOTAL_WEIGHT/g, tokens, balances, _denorms, from, zeroAddress);
+      await verifyRejection(pool, 'initialize', /ERR_MAX_TOTAL_WEIGHT/g, tokens, balances, _denorms, from, zeroAddress, from);
     });
   });
 
@@ -216,7 +238,8 @@ describe('IndexPool.sol', async () => {
         [toWei(100), toWei(100)],
         [toWei(12.5), toWei(12.5)],
         from,
-        handler.address
+        handler.address,
+        from
       );
     });
   
@@ -850,12 +873,16 @@ describe('IndexPool.sol', async () => {
 
     it('Prices initialized tokens normally', async () => {
       const poolAmountIn = 1;
+      const previousRecipientBalance = await indexPool.balanceOf(feeRecipient);
       const expectedAmountsOut = poolHelper.calcAllOutGivenPoolIn(poolAmountIn, true);
       const previousPoolBalance = await indexPool.totalSupply();
       await indexPool.exitPool(toWei(poolAmountIn), [0, 0, 0]);
       const currentPoolBalance = await indexPool.totalSupply();
       const poolSupplyDiff = previousPoolBalance.sub(currentPoolBalance);
       expect(+calcRelativeDiff(0.995, fromWei(poolSupplyDiff))).to.be.lte(errorDelta);
+      const newRecipientBalance = await indexPool.balanceOf(feeRecipient);
+      const feesGained = fromWei(newRecipientBalance.sub(previousRecipientBalance));
+      expect(+calcRelativeDiff(0.005, feesGained)).to.be.lte(errorDelta)
       for (let i = 0; i < tokens.length; i++) {
         const previousTokenBalance = balances[i];
         const currentTokenBalance = await indexPool.getBalance(tokens[i]);
