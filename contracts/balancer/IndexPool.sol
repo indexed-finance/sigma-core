@@ -571,7 +571,6 @@ contract IndexPool is BToken, BMath, IIndexPool {
     external
     override
     _lock_
-    _public_
     returns (uint256/* tokenAmountOut */)
   {
     Record memory outRecord = _getOutputToken(tokenOut);
@@ -626,7 +625,6 @@ contract IndexPool is BToken, BMath, IIndexPool {
     external
     override
     _lock_
-    _public_
     returns (uint256/* poolAmountIn */)
   {
     Record memory outRecord = _getOutputToken(tokenOut);
