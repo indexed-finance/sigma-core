@@ -292,7 +292,8 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
       balances,
       denormalizedWeights,
       msg.sender,
-      sellerAddress
+      sellerAddress,
+      owner()
     );
 
     IUnboundTokenSeller(sellerAddress).initialize(

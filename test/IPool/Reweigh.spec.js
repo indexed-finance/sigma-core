@@ -349,7 +349,8 @@ describe('reweighTokens()', async () => {
         balances,
         denormalizedWeights,
         from,
-        unbindTokenHandler.address
+        unbindTokenHandler.address,
+        from
       );
     });
 

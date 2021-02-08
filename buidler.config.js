@@ -98,6 +98,9 @@ module.exports = {
     deployer: {
       default: 0
     },
+    feeRecipient: {
+      default: 1
+    }
   },
   networks: {
     buidlerevm: {

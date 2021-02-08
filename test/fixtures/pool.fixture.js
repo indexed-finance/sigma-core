@@ -7,7 +7,7 @@ const { uniswapFixture } = require('./uniswap.fixture');
 const swapFee = 0.025;
 
 const poolFixture = async ({ getNamedAccounts, ethers, tokens: _wrappedTokens }) => {
-  const { deployer } = await getNamedAccounts();
+  const { deployer, feeRecipient } = await getNamedAccounts();
 
   // Deploy contracts
   const IPoolFactory = await ethers.getContractFactory("IndexPool");
@@ -47,7 +47,8 @@ const poolFixture = async ({ getNamedAccounts, ethers, tokens: _wrappedTokens })
     balances,
     denormWeights,
     deployer,
-    unbindTokenHandler.address
+    unbindTokenHandler.address,
+    feeRecipient
   ));
 
   async function getPoolData() {
@@ -102,7 +103,8 @@ const poolFixture = async ({ getNamedAccounts, ethers, tokens: _wrappedTokens })
     verifyRevert,
     callAndSend,
     faker,
-    nonOwnerFaker
+    nonOwnerFaker,
+    feeRecipient
   };
 };
 
