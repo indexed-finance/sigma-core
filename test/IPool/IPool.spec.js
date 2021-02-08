@@ -124,9 +124,7 @@ describe('IndexPool.sol', async () => {
         'joinswapExternAmountIn',
         'joinswapPoolAmountOut',
         'swapExactAmountIn',
-        'swapExactAmountOut',
-        'exitswapPoolAmountIn',
-        'exitswapExternAmountOut'
+        'swapExactAmountOut'
       ];
       for (let fn of controllerOnlyFunctions) {
         await verifyRejection(faker, fn, /ERR_NOT_PUBLIC/g);
@@ -332,9 +330,7 @@ describe('IndexPool.sol', async () => {
         'joinswapExternAmountIn',
         'joinswapPoolAmountOut',
         'swapExactAmountIn',
-        'swapExactAmountOut',
-        'exitswapPoolAmountIn',
-        'exitswapExternAmountOut'
+        'swapExactAmountOut'
       ];
       for (let fn of controllerOnlyFunctions) {
         await verifyRejection(faker, fn, /ERR_NOT_PUBLIC/g);
