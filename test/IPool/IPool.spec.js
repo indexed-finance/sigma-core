@@ -108,6 +108,7 @@ describe('IndexPool.sol', async () => {
         'reweighTokens',
         'reindexTokens',
         'setMinimumBalance',
+        'setPublicSwap'
       ];
       for (let fn of controllerOnlyFunctions) {
         await verifyRejection(nonOwnerFaker, fn, /ERR_NOT_CONTROLLER/g);
@@ -123,7 +124,9 @@ describe('IndexPool.sol', async () => {
         'joinswapExternAmountIn',
         'joinswapPoolAmountOut',
         'swapExactAmountIn',
-        'swapExactAmountOut'
+        'swapExactAmountOut',
+        'exitswapPoolAmountIn',
+        'exitswapExternAmountOut'
       ];
       for (let fn of controllerOnlyFunctions) {
         await verifyRejection(faker, fn, /ERR_NOT_PUBLIC/g);
@@ -313,6 +316,36 @@ describe('IndexPool.sol', async () => {
       expect(retFee.eq(fee)).to.be.true;
     });
   });
+
+  describe('setPublicSwap()', async () => {
+    setupTests();
+
+    it('Freezes public swaps', async () => {
+      await indexPool.setPublicSwap(false);
+      expect(await indexPool.isPublicSwap()).to.be.false;
+    })
+
+    it('Disables functions with _public', async () => {
+      const faker = getFakerContract(indexPool);
+      const controllerOnlyFunctions = [
+        'joinPool',
+        'joinswapExternAmountIn',
+        'joinswapPoolAmountOut',
+        'swapExactAmountIn',
+        'swapExactAmountOut',
+        'exitswapPoolAmountIn',
+        'exitswapExternAmountOut'
+      ];
+      for (let fn of controllerOnlyFunctions) {
+        await verifyRejection(faker, fn, /ERR_NOT_PUBLIC/g);
+      }
+    })
+
+    it('Enables public swaps', async () => {
+      await indexPool.setPublicSwap(true);
+      expect(await indexPool.isPublicSwap()).to.be.true;
+    })
+  })
 
   describe('setMinimumBalance()', async () => {
     setupTests();
