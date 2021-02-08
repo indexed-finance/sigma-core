@@ -70,8 +70,8 @@ contract IndexPool is BToken, BMath, IIndexPool {
   /** @dev Emitted when a token reaches its minimum balance. */
   event LOG_TOKEN_READY(address indexed token);
 
-  /** @dev Emitted when public trades are enabled. */
-  event LOG_PUBLIC_SWAP_ENABLED();
+  /** @dev Emitted when public trades are disabled. */
+  event LOG_PUBLIC_SWAP_TOGGLED(bool enabled);
 
   /** @dev Emitted when the swap fee is updated. */
   event LOG_SWAP_FEE_UPDATED(uint256 swapFee);
@@ -212,7 +212,7 @@ contract IndexPool is BToken, BMath, IIndexPool {
     require(totalWeight <= MAX_TOTAL_WEIGHT, "ERR_MAX_TOTAL_WEIGHT");
     _totalWeight = totalWeight;
     _publicSwap = true;
-    emit LOG_PUBLIC_SWAP_ENABLED();
+    emit LOG_PUBLIC_SWAP_TOGGLED(true);
     _mintPoolShare(INIT_POOL_SUPPLY);
     _pushPoolShare(tokenProvider, INIT_POOL_SUPPLY);
     _unbindHandler = TokenUnbindHandler(unbindHandler);
@@ -233,7 +233,7 @@ contract IndexPool is BToken, BMath, IIndexPool {
    * @dev Delegate a comp-like governance token to an address
    * specified by the controller.
    */
-  function delegateCompLikeToken(address token,address delegatee)
+  function delegateCompLikeToken(address token, address delegatee)
     external
     override
     _control_
@@ -248,6 +248,15 @@ contract IndexPool is BToken, BMath, IIndexPool {
   function setExitFeeRecipient(address exitFeeRecipient) external override {
     require(msg.sender == _exitFeeRecipient, "ERR_NOT_FEE_RECIPIENT");
     _exitFeeRecipient = exitFeeRecipient;
+  }
+
+  /**
+   * @dev Toggle public trading for the index pool.
+   * This will enable or disable swaps and single-token joins and exits.
+   */
+  function setPublicSwap(bool enabled) external override _control_ {
+    _publicSwap = enabled;
+    emit LOG_PUBLIC_SWAP_TOGGLED(enabled);
   }
 
 /* ==========  Token Management Actions  ========== */
@@ -562,6 +571,7 @@ contract IndexPool is BToken, BMath, IIndexPool {
     external
     override
     _lock_
+    _public_
     returns (uint256/* tokenAmountOut */)
   {
     Record memory outRecord = _getOutputToken(tokenOut);
@@ -616,6 +626,7 @@ contract IndexPool is BToken, BMath, IIndexPool {
     external
     override
     _lock_
+    _public_
     returns (uint256/* poolAmountIn */)
   {
     Record memory outRecord = _getOutputToken(tokenOut);

@@ -60,7 +60,7 @@ interface IIndexPool {
 
   event LOG_TOKEN_READY(address indexed token);
 
-  event LOG_PUBLIC_SWAP_ENABLED();
+  event LOG_PUBLIC_SWAP_TOGGLED(bool enabled);
 
   event LOG_MAX_TOKENS_UPDATED(uint256 maxPoolTokens);
 
@@ -86,6 +86,8 @@ interface IIndexPool {
   function delegateCompLikeToken(address token, address delegatee) external;
 
   function setExitFeeRecipient(address) external;
+
+  function setPublicSwap(bool enabled) external;
 
   function reweighTokens(
     address[] calldata tokens,
