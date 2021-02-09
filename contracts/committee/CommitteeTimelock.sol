@@ -6,6 +6,15 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "../interfaces/ICommitteeTimelock.sol";
 
 
+/**
+ * @dev Timelock contract with an admin and superUser, where the admin
+ * must wait for the timelock and the superUser can immediately execute
+ * or cancel a transaction.
+ *
+ * The superUser is meant to be the timelock contract for a governance DAO,
+ * while the admin is a committee with delegated power over some sensitive
+ * function or assets.
+ */
 contract CommitteeTimelock is ICommitteeTimelock {
   using SafeMath for uint256;
 
@@ -50,7 +59,7 @@ contract CommitteeTimelock is ICommitteeTimelock {
   modifier isAdmin {
     require(
       msg.sender == admin || msg.sender == superUser,
-      "Timelock::isAdmin: Call must come from admin."
+      "CommitteeTimelock::isAdmin: Call must come from admin."
     );
     _;
   }
@@ -68,15 +77,15 @@ contract CommitteeTimelock is ICommitteeTimelock {
   function setDelay(uint256 delay_) public override {
     require(
       msg.sender == address(this),
-      "Timelock::setDelay: Call must come from Timelock."
+      "CommitteeTimelock::setDelay: Call must come from Timelock."
     );
     require(
       delay_ >= MINIMUM_DELAY,
-      "Timelock::setDelay: Delay must exceed minimum delay."
+      "CommitteeTimelock::setDelay: Delay must exceed minimum delay."
     );
     require(
       delay_ <= MAXIMUM_DELAY,
-      "Timelock::setDelay: Delay must not exceed maximum delay."
+      "CommitteeTimelock::setDelay: Delay must not exceed maximum delay."
     );
     delay = delay_;
 
@@ -86,7 +95,7 @@ contract CommitteeTimelock is ICommitteeTimelock {
   function acceptAdmin() public override {
     require(
       msg.sender == pendingAdmin,
-      "Timelock::acceptAdmin: Call must come from pendingAdmin."
+      "CommitteeTimelock::acceptAdmin: Call must come from pendingAdmin."
     );
     admin = msg.sender;
     pendingAdmin = address(0);
@@ -97,7 +106,7 @@ contract CommitteeTimelock is ICommitteeTimelock {
   function setPendingAdmin(address pendingAdmin_) public override {
     require(
       msg.sender == address(this),
-      "Timelock::setPendingAdmin: Call must come from Timelock."
+      "CommitteeTimelock::setPendingAdmin: Call must come from Timelock."
     );
     pendingAdmin = pendingAdmin_;
 
@@ -113,7 +122,7 @@ contract CommitteeTimelock is ICommitteeTimelock {
   ) public override isAdmin returns (bytes32) {
     require(
       eta >= getBlockTimestamp().add(delay),
-      "Timelock::queueTransaction: Estimated execution block must satisfy delay."
+      "CommitteeTimelock::queueTransaction: Estimated execution block must satisfy delay."
     );
 
     bytes32 txHash = keccak256(abi.encode(target, value, signature, data, eta));
@@ -146,15 +155,15 @@ contract CommitteeTimelock is ICommitteeTimelock {
     bytes32 txHash = keccak256(abi.encode(target, value, signature, data, eta));
     require(
       queuedTransactions[txHash],
-      "Timelock::executeTransaction: Transaction hasn't been queued."
+      "CommitteeTimelock::executeTransaction: Transaction hasn't been queued."
     );
     require(
       getBlockTimestamp() >= eta,
-      "Timelock::executeTransaction: Transaction hasn't surpassed time lock."
+      "CommitteeTimelock::executeTransaction: Transaction hasn't surpassed time lock."
     );
     require(
       getBlockTimestamp() <= eta.add(GRACE_PERIOD),
-      "Timelock::executeTransaction: Transaction is stale."
+      "CommitteeTimelock::executeTransaction: Transaction is stale."
     );
     return _executeTransaction(
       txHash,
@@ -206,7 +215,7 @@ contract CommitteeTimelock is ICommitteeTimelock {
     (bool success, bytes memory returnData) = target.call{value: value}(callData);
     require(
       success,
-      "Timelock::executeTransaction: Transaction execution reverted."
+      "CommitteeTimelock::executeTransaction: Transaction execution reverted."
     );
 
     emit ExecuteTransaction(txHash, target, value, signature, data, eta);
