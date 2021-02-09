@@ -38,6 +38,8 @@ interface ICommitteeTimelock {
 
   function admin() external view returns (address);
 
+  function superUser() external view returns (address);
+
   function pendingAdmin() external view returns (address);
 
   function delay() external view returns (uint256);

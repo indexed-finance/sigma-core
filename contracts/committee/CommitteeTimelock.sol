@@ -41,23 +41,25 @@ contract CommitteeTimelock is ICommitteeTimelock {
   uint256 public constant override MINIMUM_DELAY = 2 days;
   uint256 public constant override MAXIMUM_DELAY = 30 days;
 
+  address public immutable override superUser;
+
   address public override admin;
   address public override pendingAdmin;
   uint256 public override delay;
 
+  modifier isAdmin {
+    require(
+      msg.sender == admin || msg.sender == superUser,
+      "Timelock::isAdmin: Call must come from admin."
+    );
+    _;
+  }
+
   mapping(bytes32 => bool) public override queuedTransactions;
 
-  constructor(address admin_, uint256 delay_) public {
-    require(
-      delay_ >= MINIMUM_DELAY,
-      "Timelock::constructor: Delay must exceed minimum delay."
-    );
-    require(
-      delay_ <= MAXIMUM_DELAY,
-      "Timelock::setDelay: Delay must not exceed maximum delay."
-    );
-
+  constructor(address admin_, address superUser_, uint256 delay_) public {
     admin = admin_;
+    superUser = superUser_;
     delay = delay_;
   }
 
@@ -108,11 +110,7 @@ contract CommitteeTimelock is ICommitteeTimelock {
     string memory signature,
     bytes memory data,
     uint256 eta
-  ) public override returns (bytes32) {
-    require(
-      msg.sender == admin,
-      "Timelock::queueTransaction: Call must come from admin."
-    );
+  ) public override isAdmin returns (bytes32) {
     require(
       eta >= getBlockTimestamp().add(delay),
       "Timelock::queueTransaction: Estimated execution block must satisfy delay."
@@ -131,12 +129,7 @@ contract CommitteeTimelock is ICommitteeTimelock {
     string memory signature,
     bytes memory data,
     uint256 eta
-  ) public override {
-    require(
-      msg.sender == admin,
-      "Timelock::cancelTransaction: Call must come from admin."
-    );
-
+  ) public override isAdmin {
     bytes32 txHash = keccak256(abi.encode(target, value, signature, data, eta));
     queuedTransactions[txHash] = false;
 
@@ -149,12 +142,7 @@ contract CommitteeTimelock is ICommitteeTimelock {
     string memory signature,
     bytes memory data,
     uint256 eta
-  ) public payable override returns (bytes memory) {
-    require(
-      msg.sender == admin,
-      "Timelock::executeTransaction: Call must come from admin."
-    );
-
+  ) public payable override isAdmin returns (bytes memory) {
     bytes32 txHash = keccak256(abi.encode(target, value, signature, data, eta));
     require(
       queuedTransactions[txHash],
