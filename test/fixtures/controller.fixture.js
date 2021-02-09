@@ -41,7 +41,7 @@ const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
   const controller = await ethers.getContractAt('MarketCapSqrtController', controllerAddress);
   await controller.initialize();
 
-  const tokenSellerImplementation = await deploy('UnboundTokenSeller', uniswapRouter.address, uniswapOracle.address, controller.address);
+  const tokenSellerImplementation = await deploy('UnboundTokenSeller', uniswapRouter.address, uniswapOracle.address);
   await proxyManager.createManyToOneProxyRelationship(
     sellerImplementationID,
     tokenSellerImplementation.address,
@@ -56,7 +56,7 @@ const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
     { gasLimit: 400000 }
   ).then(r => r.wait());
 
-  const poolInitializerImplementation = await deploy('PoolInitializer', uniswapOracle.address, controller.address);
+  const poolInitializerImplementation = await deploy('PoolInitializer', uniswapOracle.address);
 
   await proxyManager.createManyToOneProxyRelationship(
     poolInitializerID,

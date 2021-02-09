@@ -15,6 +15,7 @@ interface IPoolInitializer {
 /* ========== Mutative ========== */
 
   function initialize(
+    address controller,
     address poolAddress,
     address[] calldata tokens,
     uint256[] calldata amounts

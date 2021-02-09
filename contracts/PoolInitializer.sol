@@ -38,7 +38,6 @@ contract PoolInitializer is IPoolInitializer {
   uint32 internal constant SHORT_TWAP_MAX_TIME_ELAPSED = 2 days;
   uint256 internal constant TOKENS_MINTED = 1e20;
 
-  address public immutable controller;
   IIndexedUniswapV2Oracle public immutable oracle;
 
 /* ==========  Events  ========== */
@@ -58,6 +57,9 @@ contract PoolInitializer is IPoolInitializer {
   // Value contributed in ether
   mapping(address => uint256) internal _credits;
   address[] internal _tokens;
+
+  // Address of the pool controller
+  address public controller;
   // Total value in ether contributed to the pool, computed at the time
   // of receipt.
   uint256 internal _totalCredit;
@@ -75,11 +77,6 @@ contract PoolInitializer is IPoolInitializer {
     _mutex = false;
   }
 
-  modifier _control_ {
-    require(msg.sender == controller, "ERR_NOT_CONTROLLER");
-    _;
-  }
-
   modifier _finished_ {
     require(_finished, "ERR_NOT_FINISHED");
     _;
@@ -92,12 +89,8 @@ contract PoolInitializer is IPoolInitializer {
 
 /* ==========  Constructor  ========== */
 
-  constructor(
-    IIndexedUniswapV2Oracle oracle_,
-    address controller_
-  ) public {
+  constructor(IIndexedUniswapV2Oracle oracle_) public {
     oracle = oracle_;
-    controller = controller_;
   }
 
 /* ==========  Start & Finish Functions  ========== */
@@ -105,21 +98,23 @@ contract PoolInitializer is IPoolInitializer {
   /**
    * @dev Sets up the pre-deployment pool.
    *
+   * @param controller_ Address of the pool controller
    * @param poolAddress Address of the pool this pre-deployment pool is for
    * @param tokens Array of desired tokens
    * @param amounts Desired amounts of the corresponding `tokens`
    */
   function initialize(
+    address controller_,
     address poolAddress,
     address[] calldata tokens,
     uint256[] calldata amounts
   )
     external
     override
-    _control_
   {
     require(_poolAddress == address(0), "ERR_INITIALIZED");
     _poolAddress = poolAddress;
+    controller = controller_;
     uint256 len = tokens.length;
     require(amounts.length == len, "ERR_ARR_LEN");
     _tokens = tokens;

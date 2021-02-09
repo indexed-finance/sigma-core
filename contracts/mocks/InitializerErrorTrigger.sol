@@ -18,7 +18,7 @@ contract InitializerErrorTrigger {
   address[] internal _tokens;
   uint256[] internal _balances;
 
-  function initialize(address pool, address[] calldata tokens, uint256[] calldata balances) external {
+  function initialize(address, address pool, address[] calldata tokens, uint256[] calldata balances) external {
     _tokens = tokens;
     _balances = balances;
     _pool = pool;

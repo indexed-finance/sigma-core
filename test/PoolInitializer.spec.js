@@ -98,20 +98,17 @@ describe('PoolInitializer.sol', async () => {
   describe('initialize()', async () => {
     before(async () => {
       let PoolInitializer = await ethers.getContractFactory('PoolInitializer');
-      initializer = await PoolInitializer.deploy(zeroAddress, addresses[0]);
-    });
-
-    it('Reverts if not called by controller', async () => {
-      await verifyRejection(initializer.connect(signer2), 'initialize', /ERR_NOT_CONTROLLER/g, zeroAddress, [], []);
+      initializer = await PoolInitializer.deploy(zeroAddress);
     });
 
     it('Reverts if array lengths do not match', async () => {
-      await verifyRejection(initializer, 'initialize', /ERR_ARR_LEN/g, zeroAddress, [], [zero]);
+      await verifyRejection(initializer, 'initialize', /ERR_ARR_LEN/g, zeroAddress, zeroAddress, [], [zero]);
     });
 
     it('Succeeds with valid inputs on first call', async () => {
       const poolAddress = `0x${'ff'.repeat(20)}`;
       await initializer.initialize(
+        zeroAddress,
         poolAddress,
         [`0x${'aa'.repeat(20)}`, `0x${'bb'.repeat(20)}`],
         [toWei(2), toWei(2)]
@@ -119,7 +116,7 @@ describe('PoolInitializer.sol', async () => {
     });
 
     it('Reverts if already initialized', async () => {
-      await verifyRejection(initializer, 'initialize', /ERR_INITIALIZED/g, `0x${'ff'.repeat(20)}`, [], []);
+      await verifyRejection(initializer, 'initialize', /ERR_INITIALIZED/g, zeroAddress, `0x${'ff'.repeat(20)}`, [], []);
     });
   });
 

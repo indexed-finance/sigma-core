@@ -48,7 +48,6 @@ contract UnboundTokenSeller is IUnboundTokenSeller {
   uint32 internal constant SHORT_TWAP_MAX_TIME_ELAPSED = 2 days;
 
   IUniswapV2Router02 internal immutable _uniswapRouter;
-  address public immutable controller;
   IIndexedUniswapV2Oracle public immutable oracle;
 
 /* ==========  Events  ========== */
@@ -74,6 +73,7 @@ contract UnboundTokenSeller is IUnboundTokenSeller {
   );
 
 /* ==========  Storage  ========== */
+  address public controller;
   // Pool the contract is selling tokens for.
   IIndexPool internal _pool;
   // Premium on the amount paid in swaps.
@@ -106,22 +106,19 @@ contract UnboundTokenSeller is IUnboundTokenSeller {
 
   constructor(
     IUniswapV2Router02 uniswapRouter,
-    IIndexedUniswapV2Oracle oracle_,
-    address controller_
+    IIndexedUniswapV2Oracle oracle_
   ) public {
     _uniswapRouter = uniswapRouter;
     oracle = oracle_;
-    controller = controller_;
   }
 
   /**
    * @dev Initialize the proxy contract with the acceptable premium rate
    * and the address of the pool it is for.
    */
-  function initialize(address pool, uint8 premiumPercent)
+  function initialize(address controller_, address pool, uint8 premiumPercent)
     external
     override
-    _control_
   {
     require(address(_pool) == address(0), "ERR_INITIALIZED");
     require(pool != address(0), "ERR_NULL_ADDRESS");
@@ -131,6 +128,7 @@ contract UnboundTokenSeller is IUnboundTokenSeller {
     );
     _premiumPercent = premiumPercent;
     _pool = IIndexPool(pool);
+    controller = controller_;
   }
 
 /* ==========  Controls  ========== */
