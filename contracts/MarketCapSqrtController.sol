@@ -236,7 +236,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
       uint256[] memory balances
     ) = getInitialTokensAndBalances(categoryID, indexSize, uint144(initialWethValue));
 
-    initializer.initialize(poolAddress, tokens, balances);
+    initializer.initialize(address(this), poolAddress, tokens, balances);
 
     emit NewPoolInitializer(
       poolAddress,
