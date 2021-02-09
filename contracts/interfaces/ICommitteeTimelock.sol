@@ -1,7 +1,7 @@
 pragma solidity ^0.6.0;
 
 
-interface ITimelock {
+interface ICommitteeTimelock {
   event NewAdmin(address indexed newAdmin);
   event NewPendingAdmin(address indexed newPendingAdmin);
   event NewDelay(uint256 indexed newDelay);

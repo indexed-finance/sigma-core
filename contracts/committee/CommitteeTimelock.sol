@@ -3,10 +3,10 @@ pragma solidity ^0.6.0;
 
 import "@openzeppelin/contracts/math/SafeMath.sol";
 
-import "../interfaces/ITimelock.sol";
+import "../interfaces/ICommitteeTimelock.sol";
 
 
-contract Timelock is ITimelock {
+contract CommitteeTimelock is ICommitteeTimelock {
   using SafeMath for uint256;
 
   event NewAdmin(address indexed newAdmin);
