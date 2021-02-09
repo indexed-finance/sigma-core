@@ -182,7 +182,7 @@ contract CommitteeTimelock is ICommitteeTimelock {
     bytes memory data,
     uint256 eta
   ) public payable override returns (bytes memory) {
-    require(msg.sender == superUser, "Timelock::sudo: Caller is not superUser.");
+    require(msg.sender == superUser, "CommitteeTimelock::sudo: Caller is not superUser.");
     bytes32 txHash = keccak256(abi.encode(target, value, signature, data, eta));
     return _executeTransaction(
       txHash,
