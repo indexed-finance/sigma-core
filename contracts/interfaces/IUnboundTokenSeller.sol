@@ -19,7 +19,7 @@ interface IUnboundTokenSeller {
 
 /* ========== Mutative ========== */
 
-  function initialize(address pool, uint8 premiumPercent) external;
+  function initialize(address controller_, address pool, uint8 premiumPercent) external;
 
   function handleUnbindToken(address token, uint256 amount) external;
 
