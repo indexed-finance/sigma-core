@@ -297,6 +297,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     );
 
     IUnboundTokenSeller(sellerAddress).initialize(
+      address(this),
       poolAddress,
       defaultSellerPremium
     );
