@@ -80,7 +80,6 @@ interface ICommitteeTimelock {
     address target,
     uint256 value,
     string calldata signature,
-    bytes calldata data,
-    uint256 eta
+    bytes calldata data
   ) external payable returns (bytes memory);
 }
