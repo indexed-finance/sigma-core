@@ -56,7 +56,7 @@ const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
     { gasLimit: 400000 }
   ).then(r => r.wait());
 
-  const poolInitializerImplementation = await deploy('PoolInitializer', uniswapOracle.address, controller.address);
+  const poolInitializerImplementation = await deploy('PoolInitializer', uniswapOracle.address);
 
   await proxyManager.createManyToOneProxyRelationship(
     poolInitializerID,
