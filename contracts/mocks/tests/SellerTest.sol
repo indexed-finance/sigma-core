@@ -37,12 +37,12 @@ contract SellerTest is TestTokenMarkets, Diff, TestOrder {
     TestTokenMarkets(_weth, _factory, _router)
   {
     oracle = _oracle;
-    seller = new UnboundTokenSeller(_router, _oracle, address(this));
+    seller = new UnboundTokenSeller(_router, _oracle);
     pool = new MockUnbindSourcePool(address(seller));
   }
 
   function test_initialize() external {
-    try seller.initialize(address(0), 2) {
+    try seller.initialize(address(this), address(0), 2) {
       revert("Error: Expected revert");
     } catch Error(string memory errorMsg) {
       require(
@@ -50,7 +50,7 @@ contract SellerTest is TestTokenMarkets, Diff, TestOrder {
         "Error: Expected ERR_NULL_ADDRESS error message."
       );
     }
-    try seller.initialize(address(pool), 0) {
+    try seller.initialize(address(this), address(pool), 0) {
       revert("Error: Expected revert");
     } catch Error(string memory errorMsg) {
       require(
@@ -58,7 +58,7 @@ contract SellerTest is TestTokenMarkets, Diff, TestOrder {
         "Error: Expected ERR_PREMIUM error message."
       );
     }
-    try seller.initialize(address(pool), 21) {
+    try seller.initialize(address(this), address(pool), 21) {
       revert("Error: Expected revert");
     } catch Error(string memory errorMsg) {
       require(
@@ -66,8 +66,8 @@ contract SellerTest is TestTokenMarkets, Diff, TestOrder {
         "Error: Expected ERR_PREMIUM error message."
       );
     }
-    seller.initialize(address(pool), 2);
-    try seller.initialize(address(pool), 2) {
+    seller.initialize(address(this), address(pool), 2);
+    try seller.initialize(address(this), address(pool), 2) {
       revert("Error: Expected revert");
     } catch Error(string memory errorMsg) {
       require(
