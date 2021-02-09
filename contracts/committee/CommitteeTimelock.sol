@@ -156,7 +156,43 @@ contract CommitteeTimelock is ICommitteeTimelock {
       getBlockTimestamp() <= eta.add(GRACE_PERIOD),
       "Timelock::executeTransaction: Transaction is stale."
     );
+    return _executeTransaction(
+      txHash,
+      target,
+      value,
+      signature,
+      data,
+      eta
+    );
+  }
 
+  function sudo(
+    address target,
+    uint256 value,
+    string memory signature,
+    bytes memory data,
+    uint256 eta
+  ) public payable override returns (bytes memory) {
+    require(msg.sender == superUser, "Timelock::sudo: Caller is not superUser.");
+    bytes32 txHash = keccak256(abi.encode(target, value, signature, data, eta));
+    return _executeTransaction(
+      txHash,
+      target,
+      value,
+      signature,
+      data,
+      eta
+    );
+  }
+
+  function _executeTransaction(
+    bytes32 txHash,
+    address target,
+    uint256 value,
+    string memory signature,
+    bytes memory data,
+    uint256 eta
+  ) internal returns (bytes memory) {
     queuedTransactions[txHash] = false;
 
     bytes memory callData;

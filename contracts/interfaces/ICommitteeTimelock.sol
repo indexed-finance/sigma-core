@@ -75,4 +75,12 @@ interface ICommitteeTimelock {
     bytes calldata data,
     uint256 eta
   ) external payable returns (bytes memory);
+
+  function sudo(
+    address target,
+    uint256 value,
+    string calldata signature,
+    bytes calldata data,
+    uint256 eta
+  ) external payable returns (bytes memory);
 }
