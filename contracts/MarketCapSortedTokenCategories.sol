@@ -6,59 +6,55 @@ pragma experimental ABIEncoderV2;
 import "@indexed-finance/uniswap-v2-oracle/contracts/interfaces/IIndexedUniswapV2Oracle.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+/* ========== Internal Libraries ========== */
+import "./lib/TokenSortLibrary.sol";
+
+/* ========== Internal Interfaces ========== */
+import "./interfaces/ICirculatingMarketCapOracle.sol";
+
 /* ========== Internal Inheritance ========== */
 import "./OwnableProxy.sol";
 
 
 /**
- * @title MarketCapSortedCategories
+ * @title MarketCapSortedTokenCategories
  * @author d1ll0n
  *
  * @dev This contract stores token categories created by the contract owner.
  * Token categories are sorted by their fully diluted market caps, which is
  * extrapolated by multiplying each token's total supply by its moving
  * average weth price on UniSwap.
- *
- * Categories are periodically sorted, ranking their tokens in descending order by
- * market cap.
- *
- * CRITERIA
- * ===============
- * To be added to a category, a token should meet the following requirements in addition
- * to any other criteria for the particular category:
- *
- * 1. The token is at least a week old.
- * 2. The token complies with the ERC20 standard (boolean return values not required)
- * 3. No major vulnerabilities have been discovered in the token contract.
- * 4. The token does not have a deflationary supply model.
- * 5. The token's supply can not be arbitrarily inflated or deflated maliciously.
- * 5.a. The control model should be considered if the supply can be modified arbitrarily.
- * ===============
  */
 contract MarketCapSortedTokenCategories is OwnableProxy {
 /* ==========  Constants  ========== */
 
   // TWAP parameters for capturing long-term price trends
-  uint32 internal constant LONG_TWAP_MIN_TIME_ELAPSED = 1 days;
-  uint32 internal constant LONG_TWAP_MAX_TIME_ELAPSED = 1.5 weeks;
+  uint32 public constant LONG_TWAP_MIN_TIME_ELAPSED = 1 days;
+  uint32 public constant LONG_TWAP_MAX_TIME_ELAPSED = 1.5 weeks;
 
   // TWAP parameters for assessing current price
-  uint32 internal constant SHORT_TWAP_MIN_TIME_ELAPSED = 20 minutes;
-  uint32 internal constant SHORT_TWAP_MAX_TIME_ELAPSED = 2 days;
+  uint32 public constant SHORT_TWAP_MIN_TIME_ELAPSED = 20 minutes;
+  uint32 public constant SHORT_TWAP_MAX_TIME_ELAPSED = 2 days;
 
   // Maximum time between a category being sorted and a query for the top n tokens
-  uint256 internal constant MAX_SORT_DELAY = 1 days;
+  uint256 public constant MAX_SORT_DELAY = 1 days;
 
   // Maximum number of tokens in a category
-  uint256 internal constant MAX_CATEGORY_TOKENS = 25;
+  uint256 public constant MAX_CATEGORY_TOKENS = 25;
 
-  // Long term price oracle
-  IIndexedUniswapV2Oracle public immutable oracle;
+  // Uniswap TWAP oracle
+  IIndexedUniswapV2Oracle public immutable uniswapOracle;
 
 /* ==========  Events  ========== */
 
   /** @dev Emitted when a new category is created. */
-  event CategoryAdded(uint256 categoryID, bytes32 metadataHash);
+  event CategoryAdded(
+    uint256 categoryID,
+    bytes32 metadataHash,
+    bool useFullyDilutedMarketCaps,
+    uint128 minMarketCap,
+    uint128 maxMarketCap
+  );
 
   /** @dev Emitted when a category is sorted. */
   event CategorySorted(uint256 categoryID);
@@ -69,15 +65,33 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
   /** @dev Emitted when a token is removed from a category. */
   event TokenRemoved(address token, uint256 categoryID);
 
+/* ==========  Structs  ========== */
+
+  /**
+   * @dev Token category storage structure.
+   * @param useFullyDilutedMarketCaps If true, use fully diluted mcap rather than circulating
+   * to sort and filter tokens.
+   * @param minMarketCap Minimum market cap for included tokens
+   * @param maxMarketCap Maximum market cap for included tokens
+   * @param tokens The list of tokens in the category
+   * @param isIncludedToken Mapping of included tokens
+   */
+  struct Category {
+    bool useFullyDilutedMarketCaps;
+    uint112 minMarketCap;
+    uint112 maxMarketCap;
+    address[] tokens;
+    mapping(address => bool) isIncludedToken;
+  }
+
 /* ==========  Storage  ========== */
+
+  // Chainlink or other circulating market cap oracle
+  ICirculatingMarketCapOracle public circulatingMarketCapOracle;
 
   // Number of categories that exist.
   uint256 public categoryIndex;
-  // Array of tokens for each category.
-  mapping(uint256 => address[]) internal _categoryTokens;
-  mapping(uint256 => mapping(address => bool)) internal _isCategoryToken;
-  // Last time a category was sorted
-  mapping(uint256 => uint256) internal _lastCategoryUpdate;
+  mapping(uint256 => Category) internal _categories;
 
 /* ========== Modifiers ========== */
 
@@ -93,37 +107,48 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
    * of the related contracts.
    */
   constructor(IIndexedUniswapV2Oracle _oracle) public OwnableProxy() {
-    oracle = _oracle;
+    uniswapOracle = _oracle;
   }
 
-/* ==========  Initializer  ========== */
+/* ==========  Configuration  ========== */
 
   /**
    * @dev Initialize the categories with the owner address.
    * This sets up the contract which is deployed as a singleton proxy.
    */
-  function initialize() public virtual {
+  function initialize(address circulatingMarketCapOracle_) public virtual {
     _initializeOwnership();
+    circulatingMarketCapOracle = ICirculatingMarketCapOracle(circulatingMarketCapOracle_);
   }
 
-/* ==========  Category Management  ========== */
-
-  /**
-   * @dev Updates the prices on the oracle for all the tokens in a category.
-   */
-  function updateCategoryPrices(uint256 categoryID) external validCategory(categoryID) returns (bool[] memory pricesUpdated) {
-    address[] memory tokens = _categoryTokens[categoryID];
-    pricesUpdated = oracle.updatePrices(tokens);
+  function setCirculatingMarketCapOracle(address circulatingMarketCapOracle_) external onlyOwner {
+    circulatingMarketCapOracle = ICirculatingMarketCapOracle(circulatingMarketCapOracle_);
   }
+
+/* ==========  Permissioned Category Management  ========== */
 
   /**
    * @dev Creates a new token category.
    * @param metadataHash Hash of metadata about the token category
    * which can be distributed on IPFS.
    */
-  function createCategory(bytes32 metadataHash) external onlyOwner {
+  function createCategory(
+    bytes32 metadataHash,
+    bool useFullyDilutedMarketCaps,
+    uint112 minMarketCap,
+    uint112 maxMarketCap
+  )
+    external
+    onlyOwner
+  {
+    require(minMarketCap > 0, "ERR_NULL_MIN_CAP");
+    require(maxMarketCap > minMarketCap, "ERR_MAX_CAP");
     uint256 categoryID = ++categoryIndex;
-    emit CategoryAdded(categoryID, metadataHash);
+    _categories[categoryID].useFullyDilutedMarketCaps = useFullyDilutedMarketCaps;
+    _categories[categoryID].minMarketCap = minMarketCap;
+    _categories[categoryID].maxMarketCap = maxMarketCap;
+    // _categoryMarketCapBounds[categoryID] = [minMarketCap, maxMarketCap];
+    emit CategoryAdded(categoryID, metadataHash, useFullyDilutedMarketCaps, minMarketCap, maxMarketCap);
   }
 
   /**
@@ -133,16 +158,14 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
    * @param token Token to add to the category.
    */
   function addToken(uint256 categoryID, address token) external onlyOwner validCategory(categoryID) {
+    Category storage category = _categories[categoryID];
     require(
-      _categoryTokens[categoryID].length < MAX_CATEGORY_TOKENS,
+      category.tokens.length < MAX_CATEGORY_TOKENS,
       "ERR_MAX_CATEGORY_TOKENS"
     );
-    _addToken(categoryID, token);
-    oracle.updatePrice(token);
-    // Decrement the timestamp for the last category update to ensure
-    // that the new token is sorted before the category's top tokens
-    // can be queried.
-    _lastCategoryUpdate[categoryID] -= MAX_SORT_DELAY;
+    _addToken(category, token);
+    uniswapOracle.updatePrice(token);
+    emit TokenAdded(token, categoryID);
   }
 
   /**
@@ -155,18 +178,17 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
     onlyOwner
     validCategory(categoryID)
   {
+    Category storage category = _categories[categoryID];
     require(
-      _categoryTokens[categoryID].length + tokens.length <= MAX_CATEGORY_TOKENS,
+      category.tokens.length + tokens.length <= MAX_CATEGORY_TOKENS,
       "ERR_MAX_CATEGORY_TOKENS"
     );
     for (uint256 i = 0; i < tokens.length; i++) {
-      _addToken(categoryID, tokens[i]);
+      address token = tokens[i];
+      _addToken(category, token);
+      emit TokenAdded(token, categoryID);
     }
-    oracle.updatePrices(tokens);
-    // Decrement the timestamp for the last category update to ensure
-    // that the new tokens are sorted before the category's top tokens
-    // can be queried.
-    _lastCategoryUpdate[categoryID] -= MAX_SORT_DELAY;
+    uniswapOracle.updatePrices(tokens);
   }
 
   /**
@@ -175,20 +197,20 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
    * @param token Token to remove from the category.
    */
   function removeToken(uint256 categoryID, address token) external onlyOwner validCategory(categoryID) {
+    Category storage category = _categories[categoryID];
     uint256 i = 0;
-    uint256 len = _categoryTokens[categoryID].length;
+    uint256 len = category.tokens.length;
     require(len > 0, "ERR_EMPTY_CATEGORY");
-    require(_isCategoryToken[categoryID][token], "ERR_TOKEN_NOT_BOUND");
-    _isCategoryToken[categoryID][token] = false;
+    require(category.isIncludedToken[token], "ERR_TOKEN_NOT_BOUND");
+    category.isIncludedToken[token] = false;
     for (; i < len; i++) {
-      if (_categoryTokens[categoryID][i] == token) {
+      if (category.tokens[i] == token) {
         uint256 last = len - 1;
         if (i != last) {
-          address lastToken = _categoryTokens[categoryID][last];
-          _categoryTokens[categoryID][i] = lastToken;
+          address lastToken = category.tokens[last];
+          category.tokens[i] = lastToken;
         }
-        _lastCategoryUpdate[categoryID] -= MAX_SORT_DELAY;
-        _categoryTokens[categoryID].pop();
+        category.tokens.pop();
         emit TokenRemoved(token, categoryID);
         return;
       }
@@ -197,74 +219,108 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
     revert("ERR_NOT_FOUND");
   }
 
-  /**
-   * @dev Sorts a category's tokens in descending order by market cap.
-   * Note: Uses in-memory insertion sort.
-   *
-   * @param categoryID Category to sort
-   */
-  function orderCategoryTokensByMarketCap(uint256 categoryID) external validCategory(categoryID) {
-    address[] memory categoryTokens = _categoryTokens[categoryID];
-    uint256 len = categoryTokens.length;
-    uint144[] memory marketCaps = computeAverageMarketCaps(categoryTokens);
-    for (uint256 i = 1; i < len; i++) {
-      uint144 cap = marketCaps[i];
-      address token = categoryTokens[i];
-      uint256 j = i - 1;
-      while (int(j) >= 0 && marketCaps[j] < cap) {
-        marketCaps[j + 1] = marketCaps[j];
-        categoryTokens[j + 1] = categoryTokens[j];
-        j--;
-      }
-      marketCaps[j + 1] = cap;
-      categoryTokens[j + 1] = token;
-    }
-    _categoryTokens[categoryID] = categoryTokens;
-    
-    _lastCategoryUpdate[categoryID] = now;
-    emit CategorySorted(categoryID);
-  }
-
-/* ==========  Market Cap Queries  ========== */
+/* ==========  Public Category Updates  ========== */
 
   /**
-   * @dev Compute the average market cap of a token in weth.
-   * Queries the average amount of ether that the total supply is worth
-   * using the recent moving average price.
+   * @dev Updates the prices on the Uniswap oracle for all the tokens in a category.
    */
-  function computeAverageMarketCap(address token)
-    public
-    view
-    returns (uint144)
+  function updateCategoryPrices(uint256 categoryID)
+    external
+    validCategory(categoryID)
+    returns (bool[] memory pricesUpdated)
   {
-    uint256 totalSupply = IERC20(token).totalSupply();
-    return oracle.computeAverageEthForTokens(
-      token,
-      totalSupply,
-      LONG_TWAP_MIN_TIME_ELAPSED,
-      LONG_TWAP_MAX_TIME_ELAPSED
-    ); 
+    pricesUpdated = uniswapOracle.updatePrices(_categories[categoryID].tokens);
   }
 
   /**
-   * @dev Returns the average market cap for each token.
+   * @dev Updates the market caps for all the tokens in a category.
    */
-  function computeAverageMarketCaps(address[] memory tokens)
+  function updateCategoryMarketCaps(uint256 categoryID)
+    external
+    validCategory(categoryID)
+  {
+    Category storage category = _categories[categoryID];
+    require(!category.useFullyDilutedMarketCaps, "ERR_NOT_CIRC_CAT");
+    circulatingMarketCapOracle.updateCirculatingMarketCaps(category.tokens);
+  }
+
+  function sortAndFilterTokens(uint256 categoryID)
+    external
+    validCategory(categoryID)
+  {
+    (address[] memory categoryTokens,) = getSortedAndFilteredTokensAndMarketCaps(categoryID);
+    _categories[categoryID].tokens = categoryTokens;
+  }
+
+
+/* ==========  Category Queries  ========== */
+
+  function getSortedAndFilteredTokensAndMarketCaps(uint256 categoryID)
     public
     view
-    returns (uint144[] memory marketCaps)
+    validCategory(categoryID)
+    returns (
+      address[] memory categoryTokens,
+      uint256[] memory marketCaps
+    )
+  {
+    Category storage category = _categories[categoryID];
+    categoryTokens = category.tokens;
+    marketCaps = getMarketCaps(category.useFullyDilutedMarketCaps, categoryTokens);
+    TokenSortLibrary.sortAndFilter(
+      categoryTokens,
+      marketCaps,
+      category.minMarketCap,
+      category.maxMarketCap
+    );
+  }
+
+  /**
+   * @dev Compute the average fully-diluted market caps in weth for a set of tokens.
+   * Queries the average amounts of ether that the total supplies are worth
+   * using the recent moving average prices.
+   */
+  function getFullyDilutedMarketCaps(address[] memory tokens)
+    public
+    view
+    returns (uint256[] memory marketCaps)
   {
     uint256 len = tokens.length;
     uint256[] memory totalSupplies = new uint256[](len);
     for (uint256 i = 0; i < len; i++) {
       totalSupplies[i] = IERC20(tokens[i]).totalSupply();
     }
-    marketCaps = oracle.computeAverageEthForTokens(
-      tokens,
-      totalSupplies,
-      LONG_TWAP_MIN_TIME_ELAPSED,
-      LONG_TWAP_MAX_TIME_ELAPSED
+    marketCaps = _to256Array(
+      uniswapOracle.computeAverageEthForTokens(
+        tokens,
+        totalSupplies,
+        LONG_TWAP_MIN_TIME_ELAPSED,
+        LONG_TWAP_MAX_TIME_ELAPSED
+      )
     );
+  }
+
+  /**
+   * @dev Queries the circulating market caps for a set of tokens.
+   */
+  function getCirculatingMarketCaps(address[] memory tokens)
+    public
+    view
+    returns (uint256[] memory marketCaps)
+  {
+    marketCaps = circulatingMarketCapOracle.getCirculatingMarketCaps(tokens);
+  }
+
+  function getMarketCaps(bool useFullyDilutedMarketCaps, address[] memory tokens)
+    public
+    view
+    returns (uint256[] memory marketCaps)
+  {
+    if (useFullyDilutedMarketCaps) {
+      marketCaps = getFullyDilutedMarketCaps(tokens);
+    } else {
+      marketCaps = getCirculatingMarketCaps(tokens);
+    }
   }
 
 /* ==========  Category Queries  ========== */
@@ -277,18 +333,6 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
   }
 
   /**
-   * @dev Returns the timestamp of the last time the category was sorted.
-   */
-  function getLastCategoryUpdate(uint256 categoryID)
-    external
-    view
-    validCategory(categoryID)
-    returns (uint256)
-  {
-    return _lastCategoryUpdate[categoryID];
-  }
-
-  /**
    * @dev Returns boolean stating whether `token` is a member of the category `categoryID`.
    */
   function isTokenInCategory(uint256 categoryID, address token)
@@ -297,7 +341,7 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
     validCategory(categoryID)
     returns (bool)
   {
-    return _isCategoryToken[categoryID][token];
+    return _categories[categoryID].isIncludedToken[token];
   }
 
   /**
@@ -309,45 +353,24 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
     validCategory(categoryID)
     returns (address[] memory tokens)
   {
-    address[] storage _tokens = _categoryTokens[categoryID];
-    tokens = new address[](_tokens.length);
-    for (uint256 i = 0; i < tokens.length; i++) {
-      tokens[i] = _tokens[i];
-    }
+    tokens = _categories[categoryID].tokens;
   }
 
-  /**
-   * @dev Returns the fully diluted market caps for the tokens in a category.
-   */
-  function getCategoryMarketCaps(uint256 categoryID)
-    external
-    view
-    validCategory(categoryID)
-    returns (uint144[] memory marketCaps)
-  {
-    return computeAverageMarketCaps(_categoryTokens[categoryID]);
-  }
-
-  /**
-   * @dev Get the top `num` tokens in a category.
-   *
-   * Note: The category must have been sorted by market cap
-   * in the last `MAX_SORT_DELAY` seconds.
-   */
-  function getTopCategoryTokens(uint256 categoryID, uint256 num)
+  function getTopCategoryTokensAndMarketCaps(uint256 categoryID, uint256 count)
     public
     view
     validCategory(categoryID)
-    returns (address[] memory tokens)
+    returns (
+      address[] memory categoryTokens,
+      uint256[] memory marketCaps
+    )
   {
-    address[] storage categoryTokens = _categoryTokens[categoryID];
-    require(num <= categoryTokens.length, "ERR_CATEGORY_SIZE");
-    require(
-      now - _lastCategoryUpdate[categoryID] <= MAX_SORT_DELAY,
-      "ERR_CATEGORY_NOT_READY"
-    );
-    tokens = new address[](num);
-    for (uint256 i = 0; i < num; i++) tokens[i] = categoryTokens[i];
+    (categoryTokens, marketCaps) = getSortedAndFilteredTokensAndMarketCaps(categoryID);
+    require(count <= categoryTokens.length, "ERR_CATEGORY_SIZE");
+    assembly {
+      mstore(categoryTokens, count)
+      mstore(marketCaps, count)
+    }
   }
 
 /* ==========  Category Utility Functions  ========== */
@@ -355,10 +378,16 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
   /**
    * @dev Adds a new token to a category.
    */
-  function _addToken(uint256 categoryID, address token) internal {
-    require(!_isCategoryToken[categoryID][token], "ERR_TOKEN_BOUND");
-    _isCategoryToken[categoryID][token] = true;
-    _categoryTokens[categoryID].push(token);
-    emit TokenAdded(token, categoryID);
+  function _addToken(Category storage category, address token) internal {
+    require(!category.isIncludedToken[token], "ERR_TOKEN_BOUND");
+    category.isIncludedToken[token] = true;
+    category.tokens.push(token);
+  }
+
+  /**
+   * @dev Convert a uint144 array to a uint256 array.
+   */
+  function _to256Array(uint144[] memory arrIn) internal pure returns (uint256[] memory arrOut) {
+    assembly { arrOut := arrIn }
   }
 }
