@@ -15,7 +15,7 @@ import "./interfaces/IPoolInitializer.sol";
 
 
 /**
- * @title PoolInitializer
+ * @title SigmaPoolInitializerV1
  * @author d1ll0n
  * @dev Contract that acquires the initial balances for an index pool.
  *
@@ -28,7 +28,7 @@ import "./interfaces/IPoolInitializer.sol";
  * Once the contract receives the index pool tokens, users can claim their
  * share of the tokens proportional to their credited contribution value.
  */
-contract PoolInitializer is IPoolInitializer {
+contract SigmaPoolInitializerV1 is IPoolInitializer {
   using SafeMath for uint256;
   using SafeERC20 for IERC20;
 
@@ -195,7 +195,7 @@ contract PoolInitializer is IPoolInitializer {
    * Caller must receive at least `minimumCredit` to not revert.
    *
    * If `amountIn` is greater than the desired amount of `token`, the
-   * desired amount will be used instead. 
+   * desired amount will be used instead.
    */
   function contributeTokens(
     address token,

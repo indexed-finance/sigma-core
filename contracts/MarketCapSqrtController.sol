@@ -63,13 +63,13 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   uint256 internal constant MIN_BALANCE = 1e6;
 
   // Identifier for the pool initializer implementation on the proxy manager.
-  bytes32 internal constant INITIALIZER_IMPLEMENTATION_ID = keccak256("PoolInitializer.sol");
+  bytes32 internal constant INITIALIZER_IMPLEMENTATION_ID = keccak256("SigmaPoolInitializerV1.sol");
 
   // Identifier for the unbound token seller implementation on the proxy manager.
-  bytes32 internal constant SELLER_IMPLEMENTATION_ID = keccak256("UnboundTokenSeller.sol");
+  bytes32 internal constant SELLER_IMPLEMENTATION_ID = keccak256("SigmaUnboundTokenSellerV1.sol");
 
   // Identifier for the index pool implementation on the proxy manager.
-  bytes32 internal constant POOL_IMPLEMENTATION_ID = keccak256("IndexPool.sol");
+  bytes32 internal constant POOL_IMPLEMENTATION_ID = keccak256("SigmaIndexPoolV1.sol");
 
   // Default total weight for a pool.
   uint256 internal constant WEIGHT_MULTIPLIER = 25e18;
@@ -394,7 +394,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
     );
     uint256 size = meta.indexSize;
     address[] memory tokens = getTopCategoryTokens(meta.categoryID, size);
-  
+
     PriceLibrary.TwoWayAveragePrice[] memory prices = oracle.computeTwoWayAveragePrices(
       tokens,
       LONG_TWAP_MIN_TIME_ELAPSED,

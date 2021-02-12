@@ -41,14 +41,14 @@ const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
   const controller = await ethers.getContractAt('MarketCapSqrtController', controllerAddress);
   await controller.initialize();
 
-  const tokenSellerImplementation = await deploy('UnboundTokenSeller', uniswapRouter.address, uniswapOracle.address);
+  const tokenSellerImplementation = await deploy('SigmaUnboundTokenSellerV1', uniswapRouter.address, uniswapOracle.address);
   await proxyManager.createManyToOneProxyRelationship(
     sellerImplementationID,
     tokenSellerImplementation.address,
     { gasLimit: 400000 }
   ).then(r => r.wait());
 
-  const poolImplementation = await deploy('IndexPool');
+  const poolImplementation = await deploy('SigmaIndexPoolV1');
 
   await proxyManager.createManyToOneProxyRelationship(
     poolImplementationID,
@@ -56,7 +56,7 @@ const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
     { gasLimit: 400000 }
   ).then(r => r.wait());
 
-  const poolInitializerImplementation = await deploy('PoolInitializer', uniswapOracle.address);
+  const poolInitializerImplementation = await deploy('SigmaPoolInitializerV1', uniswapOracle.address);
 
   await proxyManager.createManyToOneProxyRelationship(
     poolInitializerID,

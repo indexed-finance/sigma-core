@@ -4,7 +4,7 @@ const { uniswapFixture } = require('./fixtures/uniswap.fixture');
 
 const { deployments, ethers } = bre;
 
-describe('UnboundTokenSeller.sol', () => {
+describe('SigmaUnboundTokenSellerV1.sol', () => {
   let testContract;
 
   before(async () => {
@@ -26,7 +26,7 @@ describe('UnboundTokenSeller.sol', () => {
   it('initialize()', async () => {
     await testContract.test_initialize();
   });
-  
+
   it('init', async () => {
     await testContract.init();
     for (let i = 0; i < 5; i++) await testContract.init2();

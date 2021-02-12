@@ -10,7 +10,7 @@ const keepFiles = [
   ...getSolFiles(contractsRoot),
   ...getSolFiles(interfaces),
   'MCapSqrtLibrary.sol',
-  'IndexPool.sol'
+  'SigmaIndexPoolV1.sol'
 ].map(f => f.replace('.sol', '.json'));
 
 const artifactsPath = path.join(__dirname, '..', 'artifacts');

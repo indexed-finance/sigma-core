@@ -150,7 +150,7 @@ describe('reweighTokens()', async () => {
 
     describe('Adjust weights during swaps and joins', async () => {
       let tokens, balances;
-  
+
       before(async () => {
         ({ tokens, balances } = await getPoolData());
       });
@@ -177,7 +177,7 @@ describe('reweighTokens()', async () => {
         }
         return res;
       }
-    
+
       it('swapExactAmountIn', async () => {
         for (let i = 0; i < tokens.length; i++) {
           const tokenIn = tokens[i];
@@ -205,7 +205,7 @@ describe('reweighTokens()', async () => {
           }
         }
       });
-    
+
       it('swapExactAmountOut', async () => {
         for (let i = 0; i < tokens.length; i++) {
           const tokenIn = tokens[i];
@@ -334,7 +334,7 @@ describe('reweighTokens()', async () => {
   describe('reindexTokens(): success', async () => {
     before(async () => {
       newToken = await erc20Factory.deploy('New Token', 'NTT');
-      const IPool = await ethers.getContractFactory('IndexPool');
+      const IPool = await ethers.getContractFactory('SigmaIndexPoolV1');
       indexPool = await IPool.deploy();
       await indexPool.configure(from, 'pool', 'pool symbol');
       for (let i = 0; i < tokens.length; i++) {
