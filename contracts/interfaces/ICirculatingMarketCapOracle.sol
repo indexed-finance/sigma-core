@@ -7,5 +7,5 @@ interface ICirculatingMarketCapOracle {
 
   function getCirculatingMarketCaps(address[] calldata) external view returns (uint256[] memory);
 
-  function updateCirculatingMarketCaps(address[] calldata) external returns (uint256[] memory);
+  function updateCirculatingMarketCaps(address[] calldata) external;
 }
