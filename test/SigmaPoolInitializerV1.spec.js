@@ -6,7 +6,7 @@ const { calcRelativeDiff } = require('./lib/calc_comparisons');
 const errorDelta = 10 ** -8;
 const ethValue = toWei(10);
 
-describe('PoolInitializer.sol', async () => {
+describe('SigmaPoolInitializerV1.sol', async () => {
   let pool, initializer, controller, wrappedTokens, sortedWrappedTokens;
   let verifyRevert, liquidityManager;
   let updatePrices, uniswapOracle, addLiquidityAll;
@@ -88,8 +88,8 @@ describe('PoolInitializer.sol', async () => {
         await addLiquidityAll();
         const { events } = await controller.prepareIndexPool(1, 5, ethValue, 'Test Index Pool', 'TIP').then(tx => tx.wait());
         const { args: { pool: poolAddress, initializer: initializerAddress } } = events.filter(e => e.event == 'NewPoolInitializer')[0];
-        pool = await ethers.getContractAt('IndexPool', poolAddress);
-        initializer = await ethers.getContractAt('PoolInitializer', initializerAddress);
+        pool = await ethers.getContractAt('SigmaIndexPoolV1', poolAddress);
+        initializer = await ethers.getContractAt('SigmaPoolInitializerV1', initializerAddress);
         verifyRevert = (...args) => verifyRejection(initializer, ...args);
       })();
     });
@@ -97,7 +97,7 @@ describe('PoolInitializer.sol', async () => {
 
   describe('initialize()', async () => {
     before(async () => {
-      let PoolInitializer = await ethers.getContractFactory('PoolInitializer');
+      let PoolInitializer = await ethers.getContractFactory('SigmaPoolInitializerV1');
       initializer = await PoolInitializer.deploy(zeroAddress);
     });
 
@@ -167,7 +167,7 @@ describe('PoolInitializer.sol', async () => {
 
   describe('getDesiredAmounts()', async () => {
     setupTests();
-    
+
     it('Returns remaining desired amounts', async () => {
       let [,expected] = await getExpectedTokensAndBalances();
       let amounts = await initializer.getDesiredAmounts(tokens);
@@ -361,7 +361,7 @@ describe('PoolInitializer.sol', async () => {
       expect((await pool.balanceOf(addresses[0])).eq(toWei(100))).to.be.true;
     });
   });
-  
+
   describe('claimTokens(address)', async () => {
     setupTests();
 
@@ -390,7 +390,7 @@ describe('PoolInitializer.sol', async () => {
       amounts = await initializer.getDesiredAmounts(tokens);
       await mintAndApprove(sortedWrappedTokens, amounts, signer3);
       await initializer.connect(signer3)['contributeTokens(address[],uint256[],uint256)'](tokens, amounts, zero);
-    
+
       const totalCredit = await initializer.getTotalCredit();
       await initializer.finish();
       await initializer['claimTokens(address[])']([addresses[1], addresses[2]]);

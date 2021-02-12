@@ -7,7 +7,7 @@ const { defaultAbiCoder } = require('ethers/lib/utils');
 
 const errorDelta = 10 ** -8;
 
-describe('IndexPool.sol', async () => {
+describe('SigmaIndexPoolV1.sol', async () => {
   let poolHelper, indexPool, erc20Factory, nonOwnerFaker;
   let getPoolData, verifyRevert, mintAndApprove, wrappedTokens;
   let tokens, balances, denormalizedWeights, normalizedWeights;
@@ -37,7 +37,7 @@ describe('IndexPool.sol', async () => {
   const updateData = async () => {
     ({ tokens, balances, denormalizedWeights, normalizedWeights } = await getPoolData());
   };
-  
+
   const triggerReindex = async (denorm = 1, minimumBalance = 5) => {
     newToken = await erc20Factory.deploy('Test Token', 'TT');
     wrappedTokens.push({
@@ -116,7 +116,7 @@ describe('IndexPool.sol', async () => {
     });
 
     it('Functions with _public_ modifier are only callable after initialization', async () => {
-      const IPool = await ethers.getContractFactory('IndexPool');
+      const IPool = await ethers.getContractFactory("SigmaIndexPoolV1");
       indexPool = await IPool.deploy();
       const faker = getFakerContract(indexPool);
       const controllerOnlyFunctions = [
@@ -138,7 +138,7 @@ describe('IndexPool.sol', async () => {
     });
 
     it('Reverts if provided controller address is zero', async () => {
-      const IPool = await ethers.getContractFactory("IndexPool");
+      const IPool = await ethers.getContractFactory("SigmaIndexPoolV1");
       const pool = await IPool.deploy();
       await verifyRejection(pool, 'configure', /ERR_NULL_ADDRESS/g, zeroAddress, 'name', 'symbol');
     });
@@ -152,9 +152,9 @@ describe('IndexPool.sol', async () => {
     it('Reverts if the pool is already initialized', async () => {
       await verifyRevert('initialize', /ERR_INITIALIZED/g, [], [], [], zeroAddress, zeroAddress, zeroAddress);
     });
-    
+
     it('Reverts if array lengths do not match', async () => {
-      const IPool = await ethers.getContractFactory("IndexPool");
+      const IPool = await ethers.getContractFactory("SigmaIndexPoolV1");
       pool = await IPool.deploy();
       await pool.configure(from, 'pool', 'pl');
       for (let i = 0; i < tokens.length; i++) {
@@ -194,17 +194,17 @@ describe('IndexPool.sol', async () => {
         zeroAddress
       );
     });
-    
+
     it('Reverts if any denorm < MIN_WEIGHT', async () => {
       const _denorms = [toWei(12), toWei(12), zero];
       await verifyRejection(pool, 'initialize', /ERR_MIN_WEIGHT/g, tokens, balances, _denorms, from, zeroAddress, from);
     });
-    
+
     it('Reverts if any denorm > MAX_WEIGHT', async () => {
       const _denorms = [toWei(12), toWei(12), toWei(100)];
       await verifyRejection(pool, 'initialize', /ERR_MAX_WEIGHT/g, tokens, balances, _denorms, from, zeroAddress, from);
     });
-    
+
     it('Reverts if any balance < MIN_BALANCE', async () => {
       await verifyRejection(pool, 'initialize', /ERR_MIN_BALANCE/g, tokens, [zero, zero, zero], denormalizedWeights, from, zeroAddress, from);
     });
@@ -218,7 +218,7 @@ describe('IndexPool.sol', async () => {
   describe('gulp()', async () => {
     let from, pool, handler;
     let tokenA, tokenB, tokenC;
-  
+
     before(async () => {
       ({ deployer: from } = await getNamedAccounts());
       const erc20Factory = await ethers.getContractFactory('MockERC20');
@@ -227,7 +227,7 @@ describe('IndexPool.sol', async () => {
       tokenC = await erc20Factory.deploy('TokenC', 'C');
       await tokenA.getFreeTokens(from, toWei(100));
       await tokenB.getFreeTokens(from, toWei(100));
-      const IPool = await ethers.getContractFactory('IndexPool');
+      const IPool = await ethers.getContractFactory('SigmaIndexPoolV1');
       pool = await IPool.deploy();
       await tokenA.approve(pool.address, toWei(100));
       await tokenB.approve(pool.address, toWei(100));
@@ -243,7 +243,7 @@ describe('IndexPool.sol', async () => {
         from
       );
     });
-  
+
     it('Sends unbound tokens to handler', async () => {
       // const randToken = await erc20Factory.deploy('GulpToken', 'GLP');
       await tokenC.getFreeTokens(pool.address, toWei(100));
@@ -251,7 +251,7 @@ describe('IndexPool.sol', async () => {
       const unbindPoolBal = await handler.getReceivedTokens(tokenC.address);
       expect(unbindPoolBal.eq(toWei(100))).to.be.true;
     });
-  
+
     it('Updates balance for bound tokens', async () => {
       await tokenA.getFreeTokens(pool.address, toWei(1));
       const balPre = await pool.getBalance(tokenA.address);
@@ -261,7 +261,7 @@ describe('IndexPool.sol', async () => {
       const diff = balPost.sub(balPre);
       expect(diff.eq(toWei(1))).to.be.true;
     });
-  
+
     it('Updates balance for uninitialized tokens', async () => {
       await pool.reindexTokens(
         [tokenA.address, tokenC.address],
@@ -275,9 +275,9 @@ describe('IndexPool.sol', async () => {
       expect(balPost.gt(balPre)).to.be.true;
       const diff = balPost.sub(balPre);
       expect(diff.eq(toWei(1))).to.be.true;
-  
+
     });
-  
+
     it('Initializes token if minimumm balance is hit', async () => {
       const denormPre = await pool.getDenormalizedWeight(tokenC.address);
       expect(denormPre.eq(0)).to.be.true;
@@ -540,7 +540,7 @@ describe('IndexPool.sol', async () => {
       await verifyRevert('swapExactAmountIn', /ERR_NOT_BOUND/g, tokens[0], zero, zeroAddress, zero, zero);
       await verifyRevert('swapExactAmountIn', /ERR_NOT_BOUND/g, zeroAddress, zero, tokens[0], zero, zero);
     });
-  
+
     it('Reverts if input amount > 1/2 of balance', async () => {
       for (let i = 0; i < tokens.length; i++) {
         const amountIn = balances[i].div(2).add(1);
@@ -630,7 +630,7 @@ describe('IndexPool.sol', async () => {
       await verifyRevert('swapExactAmountOut', /ERR_NOT_BOUND/g, tokens[0], zero, zeroAddress, zero, zero);
       await verifyRevert('swapExactAmountOut', /ERR_NOT_BOUND/g, zeroAddress, zero, tokens[0], zero, zero);
     });
-  
+
     it('Reverts if output amount > 1/3 of balance', async () => {
       for (let i = 0; i < tokens.length; i++) {
         const amountout = balances[i].div(3).add(10000);

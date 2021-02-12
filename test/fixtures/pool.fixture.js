@@ -10,7 +10,7 @@ const poolFixture = async ({ getNamedAccounts, ethers, tokens: _wrappedTokens })
   const { deployer, feeRecipient } = await getNamedAccounts();
 
   // Deploy contracts
-  const IPoolFactory = await ethers.getContractFactory("IndexPool");
+  const IPoolFactory = await ethers.getContractFactory('SigmaIndexPoolV1');
   const MockUnbindTokenHandler = await ethers.getContractFactory('MockUnbindTokenHandler');
   const unbindTokenHandler = await MockUnbindTokenHandler.deploy();
   const indexPool = await IPoolFactory.deploy();
@@ -68,7 +68,7 @@ const poolFixture = async ({ getNamedAccounts, ethers, tokens: _wrappedTokens })
       normalizedWeights
     };
   }
-  
+
   async function mintAndApprove(tokenAddress, amount) {
     const token = await ethers.getContractAt('MockERC20', tokenAddress);
     await token.getFreeTokens(deployer, amount);
@@ -78,9 +78,9 @@ const poolFixture = async ({ getNamedAccounts, ethers, tokens: _wrappedTokens })
       poolHelper.records[tokenAddress].totalSupply
     ).add(amountDec);
   }
-  
+
   const verifyRevert = (...args) => verifyRejection(indexPool, ...args);
-  
+
   const callAndSend = async (fnName, ...args) => {
     const output = await indexPool.callStatic[fnName](...args);
     await indexPool[fnName](...args);

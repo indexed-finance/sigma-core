@@ -21,7 +21,7 @@ Subject to the GPL-3.0 license
 *************************************************************************************************/
 
 
-contract IndexPool is BToken, BMath, IIndexPool {
+contract SigmaIndexPoolV1 is BToken, BMath, IIndexPool {
 
 /* ==========  EVENTS  ========== */
 

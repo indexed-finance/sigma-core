@@ -14,13 +14,13 @@ import { IIndexedUniswapV2Oracle } from "@indexed-finance/uniswap-v2-oracle/cont
 import { MockERC20, TestTokenMarkets } from "./util/TestTokenMarkets.sol";
 import "./util/Diff.sol";
 import "./util/TestOrder.sol";
-import { UnboundTokenSeller, IIndexPool } from "../../UnboundTokenSeller.sol";
+import { SigmaUnboundTokenSellerV1, IIndexPool } from "../../SigmaUnboundTokenSellerV1.sol";
 import { MockUnbindSourcePool } from "../MockUnbindSourcePool.sol";
 import { UniswapV2Library } from "../../lib/UniswapV2Library.sol";
 
 
 contract SellerTest is TestTokenMarkets, Diff, TestOrder {
-  UnboundTokenSeller public seller;
+  SigmaUnboundTokenSellerV1 public seller;
   IIndexedUniswapV2Oracle public oracle;
   MockUnbindSourcePool public pool;
   address undesiredToken;
@@ -37,7 +37,7 @@ contract SellerTest is TestTokenMarkets, Diff, TestOrder {
     TestTokenMarkets(_weth, _factory, _router)
   {
     oracle = _oracle;
-    seller = new UnboundTokenSeller(_router, _oracle);
+    seller = new SigmaUnboundTokenSellerV1(_router, _oracle);
     pool = new MockUnbindSourcePool(address(seller));
   }
 
@@ -202,7 +202,7 @@ contract SellerTest is TestTokenMarkets, Diff, TestOrder {
     uint256 amountIn = 1e17;
     uint256 wethValue = (amountIn * price2 * 100) / 98;
     uint256 expectedTokenOutput = wethValue / price1;
-  
+
     try seller.swapExactTokensForTokens(
       address(token2),
       address(token1),
@@ -240,7 +240,7 @@ contract SellerTest is TestTokenMarkets, Diff, TestOrder {
     uint256 amountOut = 1e17;
     uint256 valueOut = (amountOut * price1 * 98) / 100;
     uint256 expectedTokenInput = valueOut / price2;
-  
+
     try seller.swapTokensForExactTokens(
       address(token2),
       address(token1),

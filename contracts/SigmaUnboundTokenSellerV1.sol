@@ -17,7 +17,7 @@ import "./interfaces/IUnboundTokenSeller.sol";
 
 
 /**
- * @title UnboundTokenSeller
+ * @title SigmaUnboundTokenSellerV1
  * @author d1ll0n
  * @dev Contract for swapping undesired tokens to desired tokens for
  * an index pool.
@@ -38,7 +38,7 @@ import "./interfaces/IUnboundTokenSeller.sol";
  * events, meaning this is not well suited for trades with other smart
  * contracts.
  */
-contract UnboundTokenSeller is IUnboundTokenSeller {
+contract SigmaUnboundTokenSellerV1 is IUnboundTokenSeller {
   using SafeERC20 for IERC20;
   using PriceLibrary for PriceLibrary.TwoWayAveragePrice;
 
@@ -261,7 +261,7 @@ contract UnboundTokenSeller is IUnboundTokenSeller {
       address(this),
       block.timestamp
     );
-  
+
     // Get the actual amount paid
     uint256 amountOut = amounts[amounts.length - 1];
     if (amountOut > minAmountOut) {

@@ -2,7 +2,7 @@ const Logger = require('../lib/logger');
 const Deployer = require('../lib/deployer');
 const { sha3 } = require('../test/utils');
 
-const poolInitializerID = sha3('PoolInitializer.sol')
+const poolInitializerID = sha3('SigmaPoolInitializerV1.sol')
 
 module.exports = async (bre) => {
   const {
@@ -23,7 +23,7 @@ module.exports = async (bre) => {
   const uniswapOracle = await ethers.getContract('IndexedUniswapV2Oracle', signer);
   const controller = await ethers.getContract('controller');
 
-  const poolInitializerImplementation = await deploy('PoolInitializer', 'poolInitializerImplementation', {
+  const poolInitializerImplementation = await deploy('SigmaPoolInitializerV1', 'poolInitializerImplementation', {
     from: deployer,
     gas: 4000000,
     gasPrice,
@@ -37,4 +37,4 @@ module.exports = async (bre) => {
   ).then(r => r.wait());
 };
 
-module.exports.tags = ['PoolInitializer'];
+module.exports.tags = ['SigmaPoolInitializerV1'];
