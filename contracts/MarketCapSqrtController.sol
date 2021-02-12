@@ -69,7 +69,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories {
   bytes32 internal constant SELLER_IMPLEMENTATION_ID = keccak256("SigmaUnboundTokenSellerV1.sol");
 
   // Identifier for the index pool implementation on the proxy manager.
-  bytes32 internal constant POOL_IMPLEMENTATION_ID = keccak256("IndexPool.sol");
+  bytes32 internal constant POOL_IMPLEMENTATION_ID = keccak256("SigmaIndexPoolV1.sol");
 
   // Default total weight for a pool.
   uint256 internal constant WEIGHT_MULTIPLIER = 25e18;
