@@ -171,6 +171,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories, ControllerCo
   function initialize(address circulatingMarketCapOracle_, address circuitBreaker_) public {
     defaultSellerPremium = 2;
     super.initialize(circulatingMarketCapOracle_);
+    circuitBreaker = circuitBreaker_;
   }
 
 /* ==========  Pool Deployment  ========== */
