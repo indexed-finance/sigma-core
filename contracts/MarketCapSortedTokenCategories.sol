@@ -253,7 +253,7 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
   }
 
 
-/* ==========  Category Queries  ========== */
+/* ==========  Market Cap Queries  ========== */
 
   function getSortedAndFilteredTokensAndMarketCaps(uint256 categoryID)
     public
@@ -371,6 +371,30 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
       mstore(categoryTokens, count)
       mstore(marketCaps, count)
     }
+  }
+
+  /**
+   * @dev Query the configuration values for a token category.
+   *
+   * @param categoryID Identifier for the category
+   * @return useFullyDilutedMarketCaps Indicates whether fully diluted valuation is used
+   * @return minMarketCap Minimum market cap for an included token
+   * @return maxMarketCap Maximum market cap for an included token
+   */
+  function getCategoryConfig(uint256 categoryID)
+    external
+    view
+    validCategory(categoryID)
+    returns (
+      bool useFullyDilutedMarketCaps,
+      uint112 minMarketCap,
+      uint112 maxMarketCap
+    )
+  {
+    Category storage category = _categories[categoryID];
+    useFullyDilutedMarketCaps = category.useFullyDilutedMarketCaps;
+    minMarketCap = category.minMarketCap;
+    maxMarketCap = category.maxMarketCap;
   }
 
 /* ==========  Category Utility Functions  ========== */
