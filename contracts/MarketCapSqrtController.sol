@@ -174,6 +174,23 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories, ControllerCo
     circuitBreaker = circuitBreaker_;
   }
 
+/* ==========  Configuration  ========== */
+
+  /**
+   * @dev Sets the default premium rate for token seller contracts.
+   */
+  function setDefaultSellerPremium(uint8 _defaultSellerPremium) external onlyOwner {
+    require(_defaultSellerPremium > 0 && _defaultSellerPremium < 20, "ERR_PREMIUM");
+    defaultSellerPremium = _defaultSellerPremium;
+  }
+
+  /**
+   * @dev Sets the circuit breaker address allowed to toggle public swaps.
+   */
+  function setCircuitBreaker(address circuitBreaker_) external onlyOwner {
+    circuitBreaker = circuitBreaker_;
+  }
+
 /* ==========  Pool Deployment  ========== */
 
   /**
@@ -309,16 +326,6 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories, ControllerCo
   }
 
 /* ==========  Pool Management  ========== */
-
-  /**
-   * @dev Sets the default premium rate for token seller contracts.
-   */
-  function setDefaultSellerPremium(
-    uint8 _defaultSellerPremium
-  ) external onlyOwner {
-    require(_defaultSellerPremium > 0 && _defaultSellerPremium < 20, "ERR_PREMIUM");
-    defaultSellerPremium = _defaultSellerPremium;
-  }
 
   /**
    * @dev Set the premium rate on `sellerAddress` to the given rate.
