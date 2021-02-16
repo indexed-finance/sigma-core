@@ -7,6 +7,10 @@ const errorDelta = 10 ** -8;
 
 const WEIGHT_MULTIPLIER = toWei(25);
 
+const absDiff = (a, b) => {
+  return a.sub(b).abs().toNumber();
+}
+
 describe('MarketCapSqrtController.sol', async () => {
   let controller, from, verifyRevert;
   let nonOwnerFaker, ownerFaker;
@@ -15,12 +19,16 @@ describe('MarketCapSqrtController.sol', async () => {
   let wrappedTokens, tokens, initializerImplementation;
   let pool, initializer, tokenSeller;
   let poolSize;
+  let notOwner;
+  let circulatingCapOracle;
 
-  const setupTests = ({ init, pool, category, size, ethValue } = {}) => {
+  const setupTests = (options = {}) => {
+
     before(async () => {
       ({
         poolFactory,
         proxyManager,
+        circulatingCapOracle,
         wrappedTokens,
         controller,
         from,
@@ -33,54 +41,81 @@ describe('MarketCapSqrtController.sol', async () => {
         initializerImplementation,
         liquidityManager
       } = await deployments.createFixture(controllerFixture)());
+      const defaultOptions = {
+        init: false,
+        pool: false,
+        category: false,
+        size: undefined,
+        useFullyDiluted: true,
+        useSqrt: true,
+        ethValue: undefined
+      };
+      const { init, pool, category, size, ethValue, useFullyDiluted, useSqrt } = Object.assign(defaultOptions, options);
       tokens = wrappedTokens.map(t => t.address);
-      sortedWrappedTokens = [...wrappedTokens].sort((a, b) => {
-        if (a.marketcap < b.marketcap) return 1;
-        if (a.marketcap > b.marketcap) return -1;
-        return 0;
-      });
-      if (category) await setupCategory();
-      if (pool) await setupPool(size, ethValue);
+      if (!useFullyDiluted) {
+        sortedWrappedTokens = [
+          ...wrappedTokens.map((t, i) => ({
+            ...t,
+            marketCap: BigNumber.from(t.address.slice(0, 10)).div(2)
+          }))
+        ];
+        await circulatingCapOracle.setCirculatingMarketCaps(
+          sortedWrappedTokens.map(t => t.address),
+          sortedWrappedTokens.map(t => t.marketCap)
+        );
+        sortedWrappedTokens = sortedWrappedTokens.sort((a, b) => {
+          if (a.marketCap.lt(b.marketCap)) return 1;
+          if (a.marketCap.gt(b.marketCap)) return -1;
+          return 0;
+        });
+      } else {
+        sortedWrappedTokens = [...wrappedTokens].sort((a, b) => {
+          if (a.marketcap < b.marketcap) return 1;
+          if (a.marketcap > b.marketcap) return -1;
+          return 0;
+        });
+      }
+      if (category) await setupCategory(useFullyDiluted);
+      if (pool) await setupPool(size, ethValue, useSqrt);
       if (init) await finishInitializer();
+      [,notOwner] = await ethers.getSigners();
     });
   }
 
-  const sortTokens = async () => {
+  const sortTokens = async (fullyDiluted = true) => {
     await updatePrices(wrappedTokens);
-    const wrapped2 = [];
-    for (let i = 0; i < wrappedTokens.length; i++) {
-      const supply = await wrappedTokens[i].token.totalSupply();
-      const marketcap = liquidityManager.getTokenValue(wrappedTokens[i].address, supply);
-      wrapped2.push({
-        ...wrappedTokens[i],
-        marketcap: +fromWei(marketcap),
-        price: +fromWei(marketcap) / +fromWei(supply)
-      });
-    }
-    sortedWrappedTokens = wrapped2.sort((a, b) => {
-      if (a.marketcap < b.marketcap) return 1;
-      if (a.marketcap > b.marketcap) return -1;
+    const t = [ ...wrappedTokens ];
+    const caps = await controller.getMarketCaps(fullyDiluted, t.map(_ => _.address));
+    caps.forEach((cap, i) => t[i].marketCap = cap);
+    sortedWrappedTokens = t.sort((a, b) => {
+      if (a.marketCap.lt(b.marketCap)) return 1;
+      if (a.marketCap.gt(b.marketCap)) return -1;
       return 0;
     });
-    await controller.orderCategoryTokensByMarketCap(1);
+    await controller.sortAndFilterTokens(1);
   }
 
-  const getMarketCapSqrts = async (_tokens) => {
-    const actualMarketCaps = await Promise.all(
-      _tokens.map(async ({ token }) => liquidityManager.getTokenValue(token, await token.totalSupply()))
-    );
+  const getMarketCapSqrts = async (_tokens, fullyDiluted = true) => {
+    const actualMarketCaps = await controller.getMarketCaps(fullyDiluted, _tokens.map(t => t.address));
     const capSqrts = actualMarketCaps.map(sqrt);
     const sqrtSum = capSqrts.reduce((total, capSqrt) => total.add(capSqrt), BigNumber.from(0));
     return [capSqrts, sqrtSum];
   }
 
-  const getExpectedTokensAndBalances = async (numTokens, ethValue) => {
-    await updatePrices(wrappedTokens);
-    await fastForward(7200);
+  const getExpectedTokensAndBalances = async (numTokens, ethValue, useSqrt = true, fullyDiluted = true) => {
     await addLiquidityAll();
+    await fastForward(7200);
+    await updatePrices(sortedWrappedTokens);
     const expectedTokens = sortedWrappedTokens.slice(0, numTokens);
-    const [capSqrts, sqrtSum] = await getMarketCapSqrts(expectedTokens);
-    const weightedEthValues = capSqrts.map((rt) => rt.mul(ethValue).div(sqrtSum));
+    let weightedEthValues = [];
+    if (useSqrt) {
+      const [capSqrts, sqrtSum] = await getMarketCapSqrts(expectedTokens, fullyDiluted);
+      weightedEthValues = capSqrts.map((rt) => rt.mul(ethValue).div(sqrtSum));
+    } else {
+      const mcaps = await controller.getMarketCaps(fullyDiluted, expectedTokens.map(t => t.address));
+      const mcapSum = mcaps.reduce((t, m) => t.add(m), BigNumber.from(0));
+      weightedEthValues = mcaps.map((rt) => rt.mul(ethValue).div(mcapSum));
+    }
     const expectedBalances = weightedEthValues.map((val, i) => {
       const _price = toWei(expectedTokens[i].price);
       return val.mul(oneE18).div(_price);
@@ -88,23 +123,37 @@ describe('MarketCapSqrtController.sol', async () => {
     return [expectedTokens.map(t => t.address), expectedBalances];
   };
 
-  const setupCategory = async () => {
-    await controller.createCategory(`0x${'ff'.repeat(32)}`);
-    await controller.addTokens(1, tokens);
+  const setupCategory = async (useFullyDilutedMarketCaps = true, minCap = 1, maxCap = toWei(100000000)) => {
+    await addLiquidityAll();
+    await controller.createCategory(`0x${'ff'.repeat(32)}`, useFullyDilutedMarketCaps, minCap, maxCap);
+    const index = await controller.categoryIndex();
+    await controller.addTokens(index, tokens);
     await fastForward(3600 * 48);
     await addLiquidityAll();
-    await controller.orderCategoryTokensByMarketCap(1);
+    return index;
   };
 
-  const getExpectedDenorms = async (numTokens) => {
+  const getExpectedDenorms = async (numTokens, useFullyDilutedMarketCaps = true, useSqrt = true) => {
     const expectedTokens = sortedWrappedTokens.slice(0, numTokens);
-    const [capSqrts, sqrtSum] = await getMarketCapSqrts(expectedTokens);
-    return capSqrts.map((rt) => fromFP(toFP(rt).div(sqrtSum).mul(WEIGHT_MULTIPLIER)));
+    let denorms;
+    if (useSqrt) {
+      const [capSqrts, sqrtSum] = await getMarketCapSqrts(expectedTokens, useFullyDilutedMarketCaps);
+      denorms = capSqrts.map((rt) => fromFP(toFP(rt).div(sqrtSum).mul(WEIGHT_MULTIPLIER)));
+    } else {
+      const mcaps = await controller.getMarketCaps(useFullyDilutedMarketCaps, expectedTokens.map(t => t.address));
+      const mcapSum = mcaps.reduce((t, m) => t.add(m), BigNumber.from(0));
+      denorms = mcaps.map((rt) => fromFP(toFP(rt).div(mcapSum).mul(WEIGHT_MULTIPLIER)));
+    }
+    return denorms
   }
 
-  const changePrices = async () => {
+  const changePrices = async (fullyDiluted = true) => {
     const valuesBefore = [];
     const shouldMoves = [];
+    const newCaps = [];
+    const existingCaps = await circulatingCapOracle.getCirculatingMarketCaps(
+      sortedWrappedTokens.map(t => t.address)
+    );
     for (let i = 0; i < sortedWrappedTokens.length; i++) {
       const {address} = sortedWrappedTokens[i];
       const movePriceUp = i >= poolSize;//Math.random() > 0.5;
@@ -112,22 +161,19 @@ describe('MarketCapSqrtController.sol', async () => {
       const valueBefore = liquidityManager.getTokenValue(address, toWei(1));
       valuesBefore.push(valueBefore);
       await liquidityManager[movePriceUp ? 'swapIncreasePrice' : 'swapDecreasePrice'](address);
+      newCaps.push(existingCaps[i][movePriceUp ? 'add' : 'sub'](existingCaps[i].div(3)))
+    }
+    if (!fullyDiluted) {
+      await circulatingCapOracle.setCirculatingMarketCaps(sortedWrappedTokens.map(t => t.address), newCaps);
     }
     await updatePrices(tokens);
-    /* for (let i = 0; i < tokens.length; i++) {
-      const valueAfter = liquidityManager.getTokenValue(tokens[i], toWei(1));
-      const didMoveInRightDirection = shouldMoves[i] ? valueAfter.gt(valuesBefore[i]) : valuesBefore[i].gt(valueAfter);
-      const diff = shouldMoves[i] ? valueAfter.sub(valuesBefore[i]) : valuesBefore[i].sub(valueAfter);
-      const pctDiff = +fromWei(diff) / +fromWei(valuesBefore[i])
-      console.log(`% mvmt ? ${pctDiff * 100}`);
-    } */
   };
 
-  const prepareReweigh = async (_changePrices = false) => {
+  const prepareReweigh = async (_changePrices = false, fullyDiluted = true) => {
     await updatePrices(tokens);
     await fastForward(WEEK * 2);
     if (_changePrices) {
-      await changePrices();
+      await changePrices(fullyDiluted);
     } else {
       await addLiquidityAll();
       await updatePrices(tokens)
@@ -159,10 +205,10 @@ describe('MarketCapSqrtController.sol', async () => {
     expect(await tokenSeller.getPremiumPercent()).to.eq(defaultPremium);
   }
 
-  const setupPool = async (size = 5, ethValue = 1) => {
+  const setupPool = async (size = 5, ethValue = 1, useSqrt = true) => {
     poolSize = size;
     if ((await controller.categoryIndex()).eq(0)) await setupCategory();
-    const { events } = await controller.prepareIndexPool(1, size, toWei(ethValue), 'Test Index Pool', 'TIP').then(tx => tx.wait());
+    const { events } = await controller.prepareIndexPool(1, size, toWei(ethValue), useSqrt ? 1 : 0, 'Test Index Pool', 'TIP').then(tx => tx.wait());
     const { args: { pool: poolAddress, initializer: initializerAddress } } = events.filter(e => e.event == 'NewPoolInitializer')[0];
     pool = await ethers.getContractAt('IndexPool', poolAddress);
     initializer = await ethers.getContractAt('PoolInitializer', initializerAddress);
@@ -180,13 +226,24 @@ describe('MarketCapSqrtController.sol', async () => {
     it('owner()', async () => {
       expect(await controller.owner()).to.eq(from);
     });
+
+    it('circuitBreaker()', async () => {
+      expect(await controller.circuitBreaker()).to.eq(from);
+    })
   });
 
   describe('onlyOwner', async () => {
     setupTests();
 
     it('All functions with onlyOwner modifier revert if caller is not owner', async () => {
-      const onlyOwnerFns = ['prepareIndexPool', 'setDefaultSellerPremium', 'updateSellerPremium', 'setSwapFee', 'delegateCompLikeTokenFromPool'];
+      const onlyOwnerFns = [
+        'prepareIndexPool',
+        'setDefaultSellerPremium',
+        'updateSellerPremium',
+        'setSwapFee',
+        'delegateCompLikeTokenFromPool',
+        'setCircuitBreaker'
+      ];
       for (let fn of onlyOwnerFns) {
         await verifyRejection(nonOwnerFaker, fn, /Ownable: caller is not the owner/g);
       }
@@ -223,23 +280,83 @@ describe('MarketCapSqrtController.sol', async () => {
     });
   });
 
-  describe('getInitialTokensAndBalances()', async () => {
+  describe('setCircuitBreaker()', async () => {
     setupTests();
 
-    it('Returns the top n category tokens and target balances weighted by mcap sqrt', async () => {
-      await setupCategory();
-      const ethValue = toWei(1);
-      const [expectedTokens, expectedBalances] = await getExpectedTokensAndBalances(2, ethValue);
-      const [_tokens, balances] = await controller.getInitialTokensAndBalances(1, 2, ethValue);
-      expect(_tokens).to.deep.eq(expectedTokens);
-      expect(balances[0].eq(expectedBalances[0])).to.be.true;
-      expect(balances[1].eq(expectedBalances[1])).to.be.true;
-    });
+    it('Sets circuit breaker address', async () => {
+      await controller.setCircuitBreaker(zeroAddress);
+      expect(await controller.circuitBreaker()).to.eq(zeroAddress);
+    })
+  })
 
-    it('Reverts if any token has a target balance below the minimum', async () => {
-      const ethValue = toWei(1).div(1e12);
-      await verifyRevert('getInitialTokensAndBalances', /ERR_MIN_BALANCE/g, 1, 2, ethValue);
-    });
+  describe('getInitialTokensAndBalances()', async () => {
+    describe('Sqrt Fully Diluted Market Cap', async () => {
+      setupTests({ category: true, useFullyDiluted: true, useSqrt: true });
+
+      it('Returns the top n category tokens and target balances weighted by mcap sqrt', async () => {
+        const ethValue = toWei(1);
+        const [expectedTokens, expectedBalances] = await getExpectedTokensAndBalances(5, ethValue, true, true);
+        const [_tokens, balances] = await controller.getInitialTokensAndBalances(1, 1, 5, ethValue);
+        expect(_tokens).to.deep.eq(expectedTokens);
+        for (let i = 0; i < 5; i++) {
+          const diff = absDiff(balances[i], expectedBalances[i]);
+          expect(diff).to.be.lte(1);
+        }
+      });
+
+      it('Reverts if any token has a target balance below the minimum', async () => {
+        const ethValue = toWei(1).div(1e12);
+        await verifyRevert('getInitialTokensAndBalances', /ERR_MIN_BALANCE/g, 1, 1, 2, ethValue);
+      });
+    })
+
+    describe('Proportional Fully Diluted Market Cap', async () => {
+      setupTests();
+
+      it('Returns the top n category tokens and target balances weighted by mcap sqrt', async () => {
+        await setupCategory();
+        const ethValue = toWei(1);
+        const [expectedTokens, expectedBalances] = await getExpectedTokensAndBalances(5, ethValue, false, true);
+        const [_tokens, balances] = await controller.getInitialTokensAndBalances(1, 0, 5, ethValue);
+        expect(_tokens).to.deep.eq(expectedTokens);
+        for (let i = 0; i < 5; i++) {
+          const diff = absDiff(balances[i], expectedBalances[i]) ;
+          expect(diff).to.be.lte(1);
+        }
+      });
+    })
+
+    describe('Sqrt Circulating Market Cap', async () => {
+      setupTests({ category: true, useFullyDiluted: false, useSqrt: true });
+
+      it('Returns the top n category tokens and target balances weighted by mcap sqrt', async () => {
+        const ethValue = toWei(1);
+        const [expectedTokens, expectedBalances] = await getExpectedTokensAndBalances(5, ethValue, true, false);
+        const [_tokens, balances] = await controller.getInitialTokensAndBalances(1, 1, 5, ethValue);
+        expect(_tokens).to.deep.eq(expectedTokens);
+        for (let i = 0; i < 5; i++) {
+          const diff = absDiff(balances[i], expectedBalances[i]) ;
+          expect(diff).to.be.lte(1);
+        }
+      });
+    })
+
+    describe('Proportional Circulating Market Cap', async () => {
+      setupTests({ category: true, useFullyDiluted: false, useSqrt: false });
+
+      it('Returns the top n category tokens and target balances weighted by mcap sqrt', async () => {
+        await updatePrices(wrappedTokens);
+        await fastForward(7200);
+        const ethValue = toWei(1);
+        const [expectedTokens, expectedBalances] = await getExpectedTokensAndBalances(5, ethValue, false, false);
+        const [_tokens, balances] = await controller.getInitialTokensAndBalances(1, 0, 5, ethValue);
+        expect(_tokens).to.deep.eq(expectedTokens);
+        for (let i = 0; i < 5; i++) {
+          const diff = absDiff(balances[i], expectedBalances[i]) ;
+          expect(diff).to.be.lte(1);
+        }
+      });
+    })
   });
 
   describe('prepareIndexPool()', async () => {
@@ -247,26 +364,27 @@ describe('MarketCapSqrtController.sol', async () => {
 
     it('Reverts if size > 10', async () => {
       await setupCategory();
-      await verifyRevert('prepareIndexPool', /ERR_MAX_INDEX_SIZE/g, 1, 11, zero, 'a', 'b');
+      await verifyRevert('prepareIndexPool', /ERR_MAX_INDEX_SIZE/g, 1, 11, zero, 1, 'a', 'b');
     });
 
     it('Reverts if size < 2', async () => {
-      await verifyRevert('prepareIndexPool', /ERR_MIN_INDEX_SIZE/g, 1, 1, zero, 'a', 'b');
+      await verifyRevert('prepareIndexPool', /ERR_MIN_INDEX_SIZE/g, 1, 1, zero, 1, 'a', 'b');
     });
 
     it('Reverts if initialWethValue >= 2^144', async () => {
       const ethValue = BigNumber.from(2).pow(144);
-      await verifyRevert('prepareIndexPool', /ERR_MAX_UINT144/g, 1, 4, ethValue, 'a', 'b');
+      await verifyRevert('prepareIndexPool', /ERR_MAX_UINT144/g, 1, 4, ethValue, 1, 'a', 'b');
     });
 
     it('Succeeds with valid inputs', async () => {
       poolSize = 4;
-      const { events } = await controller.prepareIndexPool(1, 4, toWei(10), 'Test Index Pool', 'TIP').then(tx => tx.wait());
-      const { args: { pool: poolAddress, initializer: initializerAddress, categoryID, indexSize } } = events.filter(e => e.event == 'NewPoolInitializer')[0];
+      const { events } = await controller.prepareIndexPool(1, 4, toWei(10), 1, 'Test Index Pool', 'TIP').then(tx => tx.wait());
+      const { args: { pool: poolAddress, initializer: initializerAddress, categoryID, indexSize, formula } } = events.filter(e => e.event == 'NewPoolInitializer')[0];
       pool = await ethers.getContractAt('IndexPool', poolAddress);
       initializer = await ethers.getContractAt('PoolInitializer', initializerAddress);
       expect(categoryID.eq(1)).to.be.true;
       expect(indexSize.eq(4)).to.be.true;
+      expect(formula).to.eq(1);
     });
 
     it('Deploys the pool and initializer to the correct addresses', async () => {
@@ -278,7 +396,7 @@ describe('MarketCapSqrtController.sol', async () => {
       await verifyRevert(
         'prepareIndexPool',
         /Create2: Failed on deploy/g,
-        1, 4, toWei(10), 'Test Index Pool', 'TIP'
+        1, 4, toWei(10), 1, 'Test Index Pool', 'TIP'
       );
     });
 
@@ -351,66 +469,312 @@ describe('MarketCapSqrtController.sol', async () => {
   });
 
   describe('reweighPool()', async () => {
-    setupTests({ pool: true, init: true, size: 5, ethValue: 1});
+    describe('Sqrt Fully Diluted Market Cap', async () => {
+      setupTests({ pool: true, init: true, size: 5, ethValue: 1, useFullyDiluted: true, useSqrt: true });
+  
+      it('Reverts if < 2 weeks have passed', async () => {
+        await verifyRevert('reindexPool', /ERR_POOL_REWEIGH_DELAY/g, pool.address);
+      });
+  
+      it('Reweighs the pool and sets desired weights proportional to mcap sqrts', async () => {
+        await prepareReweigh(true);
+        const expectedWeights = await getExpectedDenorms(5, true, true);
+        await controller.reweighPool(pool.address);
+        for (let i = 0; i < 5; i++) {
+          const desiredDenorm = (await pool.getTokenRecord(sortedWrappedTokens[i].address)).desiredDenorm;
+          expect(desiredDenorm.eq(expectedWeights[i])).to.be.true;
+        }
+      });
+  
+      it('Sets reweighIndex', async () => {
+        const {reweighIndex} = await controller.indexPoolMetadata(pool.address);
+        expect(reweighIndex).to.eq(1)
+      })
+  
+      it('Reverts if reweighIndex % 4 == 0', async () => {
+        await prepareReweigh();
+        await controller.reweighPool(pool.address);
+        await prepareReweigh();
+        await controller.reweighPool(pool.address);
+        await prepareReweigh();
+        await verifyRevert('reweighPool', /ERR_REWEIGH_INDEX/g, pool.address);
+      });
+    })
 
-    it('Reverts if < 2 weeks have passed', async () => {
-      await verifyRevert('reindexPool', /ERR_POOL_REWEIGH_DELAY/g, pool.address);
-    });
+    describe('Proportional Fully Diluted Market Cap', async () => {
+      setupTests({ pool: true, init: true, size: 5, ethValue: 1, useFullyDiluted: true, useSqrt: false });
+  
+      it('Reverts if < 2 weeks have passed', async () => {
+        await verifyRevert('reindexPool', /ERR_POOL_REWEIGH_DELAY/g, pool.address);
+      });
+  
+      it('Reweighs the pool and sets desired weights proportional to mcap sqrts', async () => {
+        await prepareReweigh(true);
+        const expectedWeights = await getExpectedDenorms(5, true, false);
+        await controller.reweighPool(pool.address);
+        for (let i = 0; i < 5; i++) {
+          const desiredDenorm = (await pool.getTokenRecord(sortedWrappedTokens[i].address)).desiredDenorm;
+          expect(desiredDenorm.eq(expectedWeights[i])).to.be.true;
+        }
+      });
+  
+      it('Sets reweighIndex', async () => {
+        const {reweighIndex} = await controller.indexPoolMetadata(pool.address);
+        expect(reweighIndex).to.eq(1)
+      })
+  
+      it('Reverts if reweighIndex % 4 == 0', async () => {
+        await prepareReweigh();
+        await controller.reweighPool(pool.address);
+        await prepareReweigh();
+        await controller.reweighPool(pool.address);
+        await prepareReweigh();
+        await verifyRevert('reweighPool', /ERR_REWEIGH_INDEX/g, pool.address);
+      });
+    })
 
-    it('Reweighs the pool and sets desired weights proportional to mcap sqrts', async () => {
-      await prepareReweigh(true);
-      const expectedWeights = await getExpectedDenorms(5);
-      await controller.reweighPool(pool.address);
-      for (let i = 0; i < 5; i++) {
-        const desiredDenorm = (await pool.getTokenRecord(sortedWrappedTokens[i].address)).desiredDenorm;
-        expect(desiredDenorm.eq(expectedWeights[i])).to.be.true;
-      }
-    });
+    describe('Sqrt Circulating Market Cap', async () => {
+      setupTests({ pool: true, init: true, category: true, size: 5, ethValue: 1, useFullyDiluted: false, useSqrt: true });
+  
+      it('Reverts if < 2 weeks have passed', async () => {
+        await verifyRevert('reindexPool', /ERR_POOL_REWEIGH_DELAY/g, pool.address);
+      });
+  
+      it('Reweighs the pool and sets desired weights proportional to mcap sqrts', async () => {
+        await prepareReweigh(true, false);
+        const expectedWeights = await getExpectedDenorms(5, false, true);
+        await controller.reweighPool(pool.address);
+        for (let i = 0; i < 5; i++) {
+          console.log(`Check ${i}`)
+          const desiredDenorm = (await pool.getTokenRecord(sortedWrappedTokens[i].address)).desiredDenorm;
+          expect(desiredDenorm.eq(expectedWeights[i])).to.be.true;
+        }
+      });
+  
+      it('Sets reweighIndex', async () => {
+        const {reweighIndex} = await controller.indexPoolMetadata(pool.address);
+        expect(reweighIndex).to.eq(1)
+      })
+  
+      it('Reverts if reweighIndex % 4 == 0', async () => {
+        await prepareReweigh();
+        await controller.reweighPool(pool.address);
+        await prepareReweigh();
+        await controller.reweighPool(pool.address);
+        await prepareReweigh();
+        await verifyRevert('reweighPool', /ERR_REWEIGH_INDEX/g, pool.address);
+      });
+    })
 
-    it('Reverts if reweighIndex % 4 == 0', async () => {
-      await prepareReweigh();
-      await controller.reweighPool(pool.address);
-      await prepareReweigh();
-      await controller.reweighPool(pool.address);
-      await prepareReweigh();
-      await verifyRevert('reweighPool', /ERR_REWEIGH_INDEX/g, pool.address);
-    });
+    describe('Proportional Circulating Market Cap', async () => {
+      setupTests({ pool: true, init: true, category: true, size: 5, ethValue: 1, useFullyDiluted: false, useSqrt: false });
+  
+      it('Reverts if < 2 weeks have passed', async () => {
+        await verifyRevert('reindexPool', /ERR_POOL_REWEIGH_DELAY/g, pool.address);
+      });
+  
+      it('Reweighs the pool and sets desired weights proportional to mcap sqrts', async () => {
+        await prepareReweigh(true, false);
+        const expectedWeights = await getExpectedDenorms(5, false, false);
+        await controller.reweighPool(pool.address);
+        for (let i = 0; i < 5; i++) {
+          const desiredDenorm = (await pool.getTokenRecord(sortedWrappedTokens[i].address)).desiredDenorm;
+          expect(desiredDenorm.eq(expectedWeights[i])).to.be.true;
+        }
+      });
+  
+      it('Sets reweighIndex', async () => {
+        const {reweighIndex} = await controller.indexPoolMetadata(pool.address);
+        expect(reweighIndex).to.eq(1)
+      })
+  
+      it('Reverts if reweighIndex % 4 == 0', async () => {
+        await prepareReweigh();
+        await controller.reweighPool(pool.address);
+        await prepareReweigh();
+        await controller.reweighPool(pool.address);
+        await prepareReweigh();
+        await verifyRevert('reweighPool', /ERR_REWEIGH_INDEX/g, pool.address);
+      });
+    })
   });
 
   describe('reindexPool()', async () => {
-    setupTests({ pool: true, init: true, size: 5, ethValue: 10 });
+    describe('Sqrt Fully Diluted Market Cap', async () => {
+      setupTests({ pool: true, init: true, size: 5, ethValue: 10, useFullyDiluted: true, useSqrt: true });
+  
+      it('Reverts if < 2 weeks have passed', async () => {
+        await verifyRevert('reindexPool', /ERR_POOL_REWEIGH_DELAY/g, pool.address);
+      });
+  
+      it('Reverts if reweighIndex % 4 != 0', async () => {
+        await prepareReweigh();
+        await verifyRevert('reindexPool', /ERR_REWEIGH_INDEX/g, pool.address);
+      });
+  
+      it('Reindexes the pool with correct minimum balances and desired weights', async () => {
+        await prepareReweigh();
+        await controller.reweighPool(pool.address);
+        await prepareReweigh();
+        await controller.reweighPool(pool.address);
+        await prepareReweigh();
+        await controller.reweighPool(pool.address);
+        await prepareReweigh(true, true);
+        const willBeIncluded = sortedWrappedTokens[5].address;
+        await sortTokens(true);
+        await controller.reindexPool(pool.address);
+        const [token0, value0] = await pool.extrapolatePoolValueFromToken();
+        const ethValue = liquidityManager.getTokenValue(token0, value0);
+        const expectedMinimumBalance = liquidityManager.getEthValue(willBeIncluded, ethValue).div(100);
+        const actualMinimumBalance = await pool.getMinimumBalance(willBeIncluded);
+        expect(actualMinimumBalance.eq(expectedMinimumBalance)).to.be.true;
+      });
 
-    it('Reverts if < 2 weeks have passed', async () => {
-      await verifyRevert('reindexPool', /ERR_POOL_REWEIGH_DELAY/g, pool.address);
-    });
+      it('Sets expected target weights', async () => {
+        const caps = await controller.getMarketCaps(true, tokens);
+        sortedWrappedTokens = [...wrappedTokens.map((t, i) => ({ ...t, marketCap: caps[i] }))]
+        .sort((a, b) => {
+          if (a.marketCap.lt(b.marketCap)) return 1;
+          if (a.marketCap.gt(b.marketCap)) return -1;
+          return 0;
+        });
+        const desiredDenorms = await getExpectedDenorms(5, true, true);
+        for (let i = 0; i < 5; i++) {
+          const token = sortedWrappedTokens[i];
+          const record = await pool.getTokenRecord(token.address);
+          expect(record.desiredDenorm.eq(desiredDenorms[i])).to.be.true;
+        }
+      })
+    })
 
-    it('Reverts if reweighIndex % 4 != 0', async () => {
-      await prepareReweigh();
-      await verifyRevert('reindexPool', /ERR_REWEIGH_INDEX/g, pool.address);
-    });
+    describe('Proportional Fully Diluted Market Cap', async () => {
+      setupTests({ pool: true, init: true, size: 5, ethValue: 10, useFullyDiluted: true, useSqrt: false });
+  
+      it('Reindexes the pool with correct minimum balances and desired weights', async () => {
+        await prepareReweigh();
+        await controller.reweighPool(pool.address);
+        await prepareReweigh();
+        await controller.reweighPool(pool.address);
+        await prepareReweigh();
+        await controller.reweighPool(pool.address);
+        await prepareReweigh(true);
+        const willBeIncluded = sortedWrappedTokens[5].address;
+        await sortTokens();
+        await controller.reindexPool(pool.address);
+        const [token0, value0] = await pool.extrapolatePoolValueFromToken();
+        const ethValue = liquidityManager.getTokenValue(token0, value0);
+        const expectedMinimumBalance = liquidityManager.getEthValue(willBeIncluded, ethValue).div(100);
+        const actualMinimumBalance = await pool.getMinimumBalance(willBeIncluded);
+        expect(actualMinimumBalance.eq(expectedMinimumBalance)).to.be.true;
+      });
 
-    it('Reverts if category has not been sorted recently', async () => {
-      await prepareReweigh();
-      await controller.reweighPool(pool.address);
-      await prepareReweigh();
-      await controller.reweighPool(pool.address);
-      await prepareReweigh();
-      await controller.reweighPool(pool.address);
-      await prepareReweigh(true);
-      await verifyRevert('reindexPool', /ERR_CATEGORY_NOT_READY/g, pool.address);
-    });
+      it('Sets expected target weights', async () => {
+        const caps = await controller.getMarketCaps(true, tokens);
+        sortedWrappedTokens = [...wrappedTokens.map((t, i) => ({ ...t, marketCap: caps[i] }))]
+        .sort((a, b) => {
+          if (a.marketCap.lt(b.marketCap)) return 1;
+          if (a.marketCap.gt(b.marketCap)) return -1;
+          return 0;
+        });
+        const desiredDenorms = await getExpectedDenorms(5, true, false);
+        for (let i = 0; i < 5; i++) {
+          const token = sortedWrappedTokens[i];
+          const record = await pool.getTokenRecord(token.address);
+          expect(record.desiredDenorm.eq(desiredDenorms[i])).to.be.true;
+        }
+      })
+    })
 
-    it('Reindexes the pool with correct minimum balances and desired weights', async () => {
-      const willBeIncluded = sortedWrappedTokens[5].address;
-      await sortTokens();
-      await controller.reindexPool(pool.address);
-      const [token0, value0] = await pool.extrapolatePoolValueFromToken();
-      const ethValue = liquidityManager.getTokenValue(token0, value0);
-      const expectedMinimumBalance = liquidityManager.getEthValue(willBeIncluded, ethValue).div(100);
-      const actualMinimumBalance = await pool.getMinimumBalance(willBeIncluded);
-      expect(actualMinimumBalance.eq(expectedMinimumBalance)).to.be.true;
-    });
+    describe('Sqrt Circulating Market Cap', async () => {
+      setupTests({ pool: true, init: true, size: 5, ethValue: 10, useFullyDiluted: false, useSqrt: true });
+
+      it('Reindexes the pool with correct minimum balances and desired weights', async () => {
+        await prepareReweigh();
+        await controller.reweighPool(pool.address);
+        await prepareReweigh();
+        await controller.reweighPool(pool.address);
+        await prepareReweigh();
+        await controller.reweighPool(pool.address);
+        await prepareReweigh(true, false);
+        const willBeIncluded = sortedWrappedTokens[5].address;
+        await sortTokens(false);
+        await controller.reindexPool(pool.address);
+        const [token0, value0] = await pool.extrapolatePoolValueFromToken();
+        const ethValue = liquidityManager.getTokenValue(token0, value0);
+        const expectedMinimumBalance = liquidityManager.getEthValue(willBeIncluded, ethValue).div(100);
+        const actualMinimumBalance = await pool.getMinimumBalance(willBeIncluded);
+        expect(actualMinimumBalance.eq(expectedMinimumBalance)).to.be.true;
+      });
+
+      it('Sets expected target weights', async () => {
+        const caps = await controller.getMarketCaps(false, tokens);
+        sortedWrappedTokens = [...wrappedTokens.map((t, i) => ({ ...t, marketCap: caps[i] }))]
+        .sort((a, b) => {
+          if (a.marketCap.lt(b.marketCap)) return 1;
+          if (a.marketCap.gt(b.marketCap)) return -1;
+          return 0;
+        });
+        const desiredDenorms = await getExpectedDenorms(5, false, true);
+        for (let i = 0; i < 5; i++) {
+          const token = sortedWrappedTokens[i];
+          const record = await pool.getTokenRecord(token.address);
+          expect(record.desiredDenorm.eq(desiredDenorms[i])).to.be.true;
+        }
+      })
+    })
+
+
+    describe('Proportional Circulating Market Cap', async () => {
+      setupTests({ pool: true, init: true, size: 5, ethValue: 10, useFullyDiluted: false, useSqrt: false });
+  
+      it('Reindexes the pool with correct minimum balances and desired weights', async () => {
+        await prepareReweigh();
+        await controller.reweighPool(pool.address);
+        await prepareReweigh();
+        await controller.reweighPool(pool.address);
+        await prepareReweigh();
+        await controller.reweighPool(pool.address);
+        await prepareReweigh(true);
+        const willBeIncluded = sortedWrappedTokens[5].address;
+        await sortTokens();
+        await controller.reindexPool(pool.address);
+        const [token0, value0] = await pool.extrapolatePoolValueFromToken();
+        const ethValue = liquidityManager.getTokenValue(token0, value0);
+        const expectedMinimumBalance = liquidityManager.getEthValue(willBeIncluded, ethValue).div(100);
+        const actualMinimumBalance = await pool.getMinimumBalance(willBeIncluded);
+        expect(actualMinimumBalance.eq(expectedMinimumBalance)).to.be.true;
+      });
+
+      it('Sets expected target weights', async () => {
+        const caps = await controller.getMarketCaps(false, tokens);
+        sortedWrappedTokens = [...wrappedTokens.map((t, i) => ({ ...t, marketCap: caps[i] }))]
+        .sort((a, b) => {
+          if (a.marketCap.lt(b.marketCap)) return 1;
+          if (a.marketCap.gt(b.marketCap)) return -1;
+          return 0;
+        });
+        const desiredDenorms = await getExpectedDenorms(5, false, false);
+        for (let i = 0; i < 5; i++) {
+          const token = sortedWrappedTokens[i];
+          const record = await pool.getTokenRecord(token.address);
+          expect(record.desiredDenorm.eq(desiredDenorms[i])).to.be.true;
+        }
+      })
+    })
   });
+
+  describe('forceReindexPool', async () => {
+    setupTests();
+
+    it('Reverts if caller is not owner', async () => {
+      await verifyRejection(
+        controller.connect(notOwner),
+        'forceReindexPool',
+        /Ownable: caller is not the owner/g,
+        pool.address
+      )
+    })
+  })
 
   describe('updateMinimumBalance()', async () => {
     setupTests({ pool: true, init: true, size: 4, ethValue: 10 });
