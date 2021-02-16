@@ -20,7 +20,7 @@ const toLiquidityAmounts = ({ price, marketcap }, init = false) => {
 }
 
 const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
-  const { deployer } = await getNamedAccounts();
+  const { deployer, feeRecipient } = await getNamedAccounts();
   const [ signer, signer2 ] = await ethers.getSigners();
   const uniswapResult = await deployments.createFixture(uniswapFixture)();
   const { uniswapRouter, uniswapOracle, deployTokenAndMarket, addLiquidity, updatePrices } = uniswapResult;
@@ -34,12 +34,15 @@ const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
   // Deploy pool factory
   const poolFactory = await deploy('PoolFactory', proxyManager.address);
 
+  const circulatingCapOracle = await deploy('MockCirculatingCapOracle');
+  const circuitBreaker = deployer;
+
   // Deploy pool controller
-  const controllerImplementation = await deploy('MarketCapSqrtController', uniswapOracle.address, poolFactory.address, proxyManager.address);
+  const controllerImplementation = await deploy('MarketCapSqrtController', uniswapOracle.address, poolFactory.address, proxyManager.address, feeRecipient);
   const controllerAddress = await proxyManager.computeProxyAddressOneToOne(deployer, controllerImplementationSalt);
   await proxyManager.deployProxyOneToOne(controllerImplementationSalt, controllerImplementation.address);
   const controller = await ethers.getContractAt('MarketCapSqrtController', controllerAddress);
-  await controller.initialize();
+  await controller[`initialize(address,address)`](circulatingCapOracle.address, circuitBreaker);
 
   const tokenSellerImplementation = await deploy('UnboundTokenSeller', uniswapRouter.address, uniswapOracle.address);
   await proxyManager.createManyToOneProxyRelationship(
@@ -97,6 +100,7 @@ const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
 
   return {
     ...uniswapResult,
+    circulatingCapOracle,
     wrappedTokens,
     proxyManager,
     poolFactory,
