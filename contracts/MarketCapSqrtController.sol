@@ -146,7 +146,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories, ControllerCo
 
   /**
    * @dev Deploy the controller and configure the addresses
-   * of the related contracts.
+   * of the related accounts.
    */
   constructor(
     IIndexedUniswapV2Oracle uniswapOracle_,
@@ -551,8 +551,8 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories, ControllerCo
 
   /**
    * @dev Queries the top `indexSize` tokens in a category from the market oracle,
-   * computes their relative weights by market cap square root and determines
-   * the weighted balance of each token to meet a specified total value.
+   * computes their relative weights and determines the weighted balance of each
+   * token to meet a specified total value.
    */
   function getInitialTokensAndBalances(
     uint256 categoryID,
