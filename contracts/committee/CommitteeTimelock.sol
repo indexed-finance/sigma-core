@@ -96,8 +96,11 @@ contract CommitteeTimelock is ICommitteeTimelock {
       eta >= getBlockTimestamp().add(delay),
       "CommitteeTimelock::queueTransaction: Estimated execution block must satisfy delay."
     );
-
     bytes32 txHash = keccak256(abi.encode(target, value, signature, data, eta));
+    require(
+      queuedTransactions[txHash] == false,
+      "CommitteeTimelock::queueTransaction: Transaction already queued."
+    );
     queuedTransactions[txHash] = true;
 
     emit QueueTransaction(txHash, target, value, signature, data, eta);
