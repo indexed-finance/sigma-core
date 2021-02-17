@@ -18,34 +18,6 @@ import "../interfaces/ICommitteeTimelock.sol";
 contract CommitteeTimelock is ICommitteeTimelock {
   using SafeMath for uint256;
 
-  event NewAdmin(address indexed newAdmin);
-  event NewPendingAdmin(address indexed newPendingAdmin);
-  event NewDelay(uint256 indexed newDelay);
-  event CancelTransaction(
-    bytes32 indexed txHash,
-    address indexed target,
-    uint256 value,
-    string signature,
-    bytes data,
-    uint256 eta
-  );
-  event ExecuteTransaction(
-    bytes32 indexed txHash,
-    address indexed target,
-    uint256 value,
-    string signature,
-    bytes data,
-    uint256 eta
-  );
-  event QueueTransaction(
-    bytes32 indexed txHash,
-    address indexed target,
-    uint256 value,
-    string signature,
-    bytes data,
-    uint256 eta
-  );
-
   uint256 public constant override GRACE_PERIOD = 14 days;
   uint256 public constant override MINIMUM_DELAY = 2 days;
   uint256 public constant override MAXIMUM_DELAY = 30 days;
