@@ -21,9 +21,26 @@ import "./OwnableProxy.sol";
  * @author d1ll0n
  *
  * @dev This contract stores token categories created by the contract owner.
- * Token categories are sorted by their fully diluted market caps, which is
- * extrapolated by multiplying each token's total supply by its moving
- * average weth price on UniSwap.
+ *
+ * ===== Token Categories =====
+ * Each category is a list of tokens with a configuration for the minimum and maximum
+ * market caps of included tokens, as well as a field indicating whether circulating
+ * or fully diluted market caps are used.
+ *
+ * Token categories are sorted in descending order of the market caps of their tokens,
+ * and filtered using the configured min/max bounds.
+ *
+ * The contract owner can create a new token category with a metadata hash used to query
+ * additional details about its purpose and inclusion criteria.
+ *
+ * The owner can add and remove tokens from the categories at will.
+ *
+ * ===== Market Caps =====
+ * Fully diluted market caps are extrapolated by multiplying tokens' total supplies
+ * by their moving average weth prices on UniSwap.
+ *
+ * Circulating market caps are queried from an external oracle which is configured
+ * by the owner.
  */
 contract MarketCapSortedTokenCategories is OwnableProxy {
 /* ==========  Constants  ========== */
@@ -69,8 +86,8 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
 
   /**
    * @dev Token category storage structure.
-   * @param useFullyDilutedMarketCaps If true, use fully diluted mcap rather than circulating
-   * to sort and filter tokens.
+   * @param useFullyDilutedMarketCaps If true, use fully diluted market cap
+   * rather than circulating market cap to sort and filter tokens.
    * @param minMarketCap Minimum market cap for included tokens
    * @param maxMarketCap Maximum market cap for included tokens
    * @param tokens The list of tokens in the category
