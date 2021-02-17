@@ -64,7 +64,7 @@ describe('CommitteeTimelock.sol', async () => {
       await verifyRejection(
         timelock.connect(notAdmin),
         'queueTransaction',
-        /CommitteeTimelock::isAdmin: Call must come from admin\./g,
+        /CommitteeTimelock::isAdmin: Call must come from admin or superUser\./g,
         token.address,
         0,
         'transfer(address,uint256)',
@@ -105,7 +105,7 @@ describe('CommitteeTimelock.sol', async () => {
       await verifyRejection(
         timelock.connect(notAdmin),
         'executeTransaction',
-        /CommitteeTimelock::isAdmin: Call must come from admin\./g,
+        /CommitteeTimelock::isAdmin: Call must come from admin or superUser\./g,
         token.address,
         0,
         'transfer(address,uint256)',

@@ -31,7 +31,7 @@ contract CommitteeTimelock is ICommitteeTimelock {
   modifier isAdmin {
     require(
       msg.sender == admin || msg.sender == superUser,
-      "CommitteeTimelock::isAdmin: Call must come from admin."
+      "CommitteeTimelock::isAdmin: Call must come from admin or superUser."
     );
     _;
   }
