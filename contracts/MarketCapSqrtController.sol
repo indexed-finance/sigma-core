@@ -30,22 +30,52 @@ import "./ControllerConstants.sol";
 /**
  * @title MarketCapSqrtController
  * @author d1ll0n
- * @dev This contract implements the market cap square root index management strategy.
+ * @dev This contract is used to deploy and manage index pools.
+ * It implements the methodology for rebalancing and asset selection, as well as other
+ * controls such as pausing public swaps and managing fee configuration.
  *
- * Index pools have a defined size which is used to select the top tokens from the pool's
- * category.
+ * ===== Pool Configuration =====
+ * When an index pool is deployed, it is assigned a category, a size and a weighting formula.
  *
- * REBALANCING
- * ===============
- * Every 1 weeks, pools are either re-weighed or re-indexed.
+ * The category is the list of tokens and configuration used for selecting assets, which is
+ * detailed in the documentation for the categories contract.
+ * The size is the target number of underlying assets held by the pool, it is used to determine
+ * which assets the pool will hold.
+ * The weighting formula is used to assign weights to tokens in the pool.
+ *
+ * ===== Weighting Formulae =====
+ * There are currently two weighting formulae supported: proportional and sqrt.
+ * The weighting formulae are used to compute weights from the market caps of the tokens, which
+ * will either be circulating or fully diluted market caps according to the pool's category configuration.
+ *
+ * Proportional weighting assigns a weight to each token equal to the fraction of its market cap relative
+ * to the sum of token market caps.
+ *
+ * Sqrt weighting assigns a weight to each token equal to the fraction of its market cap relative to the sum
+ * of token market cap sqrts.
+ *
+ * ===== Asset Selection =====
+ * When the pool is deployed and when it is re-indexed, the top assets from the pool's category
+ * are selected using the index size. They are selected after the category's token list is sorted
+ * in descending order by the market caps of tokens, either fully-diluted or circulating.
+ *
+ * ===== Rebalancing =====
+ * Every week, pools are either re-weighed or re-indexed.
  * They are re-indexed once for every three re-weighs.
+ * The contract owner can also force a reindex out of the normal schedule.
  *
- * Re-indexing involves selecting the top tokens from the pool's category and weighing them
- * by the square root of their market caps.
- * Re-weighing involves weighing the tokens which are already indexed by the pool by the
- * square root of their market caps.
- * When a pool is re-weighed, only the tokens with a desired weight above 0 are included.
- * ===============
+ * Re-indexing involves re-selecting the top tokens from the pool's category using the pool's index size,
+ * assigning target weights and setting balance targets new tokens.
+ *
+ * Re-weighing involves assigning target weights to only the tokens already included in the pool.
+ *
+ * ===== Toggling Swaps =====
+ * The contract owner can set a circuitBreaker address which is allowed to toggle public swaps on index pools.
+ * The contract owner also has the ability to toggle swaps.
+ * 
+ * ===== Fees =====
+ * The contract owner can change the swap fee on index pools, and can change the premium paid on swaps in the
+ * unbound token seller contracts.
  */
 contract MarketCapSqrtController is MarketCapSortedTokenCategories, ControllerConstants {
   using FixedPoint for FixedPoint.uq112x112;
@@ -261,6 +291,10 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories, ControllerCo
    * @dev Initializes a pool which has been deployed but not initialized
    * and transfers the underlying tokens from the initialization pool to
    * the actual pool.
+   *
+   * The actual weights assigned to tokens is be calculated based on the
+   * relative values of the acquired balances, rather than the initial
+   * weights computed from the market caps.
    */
   function finishPreparedIndexPool(
     address poolAddress,
@@ -328,7 +362,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories, ControllerCo
 /* ==========  Pool Management  ========== */
 
   /**
-   * @dev Set the premium rate on `sellerAddress` to the given rate.
+   * @dev Sets the premium rate on `sellerAddress` to the given rate.
    */
   function updateSellerPremium(address tokenSeller, uint8 premiumPercent) external onlyOwner {
     require(premiumPercent > 0 && premiumPercent < 20, "ERR_PREMIUM");
@@ -361,8 +395,7 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories, ControllerCo
   }
 
   /**
-   * @dev Delegates a comp-like governance token from an index pool
-   * to a provided address.
+   * @dev Delegates a comp-like governance token from an index pool to a provided address.
    */
   function delegateCompLikeTokenFromPool(
     address pool,
@@ -376,6 +409,10 @@ contract MarketCapSqrtController is MarketCapSortedTokenCategories, ControllerCo
     IIndexPool(pool).delegateCompLikeToken(token, delegatee);
   }
 
+  /**
+   * @dev Enable/disable public swaps on an index pool.
+   * Callable by the contract owner and the `circuitBreaker` address.
+   */
   function setPublicSwap(address indexPool_, bool publicSwap) external _havePool(indexPool_) {
     require(
       msg.sender == circuitBreaker || msg.sender == owner(),
