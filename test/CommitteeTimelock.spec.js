@@ -1,4 +1,4 @@
-const { toWei, expect, verifyRejection, fastForward } = require("./utils");
+const { toWei, expect, verifyRejection, fastForward, mineBlock } = require("./utils");
 const { defaultAbiCoder } = require('ethers/lib/utils');
 
 async function deploy(contractName, ...args) {
@@ -87,7 +87,7 @@ describe('CommitteeTimelock.sol', async () => {
 
     it('can be called by admin', async () => {
       const { timestamp } = await ethers.provider.getBlock('latest');
-      eta = timestamp + DELAY + 100;
+      eta = timestamp + DELAY + 101;
       await timelock.queueTransaction(
         token.address,
         0,
