@@ -82,7 +82,7 @@ describe('CommitteeTimelock.sol', async () => {
         'transfer(address,uint256)',
         defaultAbiCoder.encode(['address', 'uint256'], [notAdmin.address, toWei(1000)]),
         timestamp + DELAY + 100
-      )
+      ).then(tx => tx.wait())
     })
 
     it('can be called by admin', async () => {
