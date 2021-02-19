@@ -14,13 +14,13 @@ import "@indexed-finance/proxies/contracts/SaltyLib.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 
 /* ========== Internal Interfaces ========== */
-import "./interfaces/IIndexPool.sol";
-import "./interfaces/IPoolFactory.sol";
-import "./interfaces/IPoolInitializer.sol";
-import "./interfaces/IUnboundTokenSeller.sol";
+import "../interfaces/IIndexPool.sol";
+import "../interfaces/IPoolFactory.sol";
+import "../interfaces/IPoolInitializer.sol";
+import "../interfaces/IUnboundTokenSeller.sol";
 
 /* ========== Internal Libraries ========== */
-import "./lib/WeightingLibrary.sol";
+import "../lib/WeightingLibrary.sol";
 
 /* ========== Internal Inheritance ========== */
 import "./MarketCapSortedTokenCategories.sol";

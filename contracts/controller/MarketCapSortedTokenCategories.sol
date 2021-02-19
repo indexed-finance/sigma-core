@@ -7,13 +7,13 @@ import "@indexed-finance/uniswap-v2-oracle/contracts/interfaces/IIndexedUniswapV
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /* ========== Internal Libraries ========== */
-import "./lib/TokenSortLibrary.sol";
+import "../lib/TokenSortLibrary.sol";
 
 /* ========== Internal Interfaces ========== */
-import "./interfaces/ICirculatingMarketCapOracle.sol";
+import "../interfaces/ICirculatingMarketCapOracle.sol";
 
 /* ========== Internal Inheritance ========== */
-import "./OwnableProxy.sol";
+import "../OwnableProxy.sol";
 
 
 /**
