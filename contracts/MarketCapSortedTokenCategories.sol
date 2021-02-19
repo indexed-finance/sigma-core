@@ -146,6 +146,7 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
 
   /**
    * @dev Creates a new token category.
+   *
    * @param metadataHash Hash of metadata about the token category
    * which can be distributed on IPFS.
    */
@@ -328,6 +329,13 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
     marketCaps = circulatingMarketCapOracle.getCirculatingMarketCaps(tokens);
   }
 
+  /**
+   * @dev Queries either the fully diluted or circulating market caps for a set of
+   * tokens.
+   *
+   * @param useFullyDilutedMarketCaps Whether to use fully diluted market caps
+   * @param tokens Array of tokens to query market caps for
+   */
   function getMarketCaps(bool useFullyDilutedMarketCaps, address[] memory tokens)
     public
     view
