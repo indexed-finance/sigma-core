@@ -545,7 +545,6 @@ describe('MarketCapSqrtController.sol', async () => {
         const expectedWeights = await getExpectedDenorms(5, false, true);
         await controller.reweighPool(pool.address);
         for (let i = 0; i < 5; i++) {
-          console.log(`Check ${i}`)
           const desiredDenorm = (await pool.getTokenRecord(sortedWrappedTokens[i].address)).desiredDenorm;
           expect(desiredDenorm.eq(expectedWeights[i])).to.be.true;
         }
