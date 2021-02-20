@@ -78,15 +78,14 @@ describe('PoolInitializer.sol', async () => {
           return 0;
         });
         tokens = sortedWrappedTokens.map(t => t.address);
-        await controller.createCategory(`0x${'ff'.repeat(32)}`);
+        await controller.createCategory(`0x${'ff'.repeat(32)}`, true, 1, toWei(100000000));
         await controller.addTokens(1, tokens);
         await fastForward(3600 * 48);
         await addLiquidityAll();
-        await controller.orderCategoryTokensByMarketCap(1);
         await updatePrices(wrappedTokens);
         await fastForward(7200);
         await addLiquidityAll();
-        const { events } = await controller.prepareIndexPool(1, 5, ethValue, 'Test Index Pool', 'TIP').then(tx => tx.wait());
+        const { events } = await controller.prepareIndexPool(1, 5, ethValue, 1, 'Test Index Pool', 'TIP').then(tx => tx.wait());
         const { args: { pool: poolAddress, initializer: initializerAddress } } = events.filter(e => e.event == 'NewPoolInitializer')[0];
         pool = await ethers.getContractAt('IndexPool', poolAddress);
         initializer = await ethers.getContractAt('PoolInitializer', initializerAddress);
