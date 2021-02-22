@@ -28,7 +28,7 @@ import "./ControllerConstants.sol";
 
 
 /**
- * @title MarketCapSqrtController
+ * @title SigmaControllerV1
  * @author d1ll0n
  * @dev This contract is used to deploy and manage index pools.
  * It implements the methodology for rebalancing and asset selection, as well as other
@@ -77,7 +77,7 @@ import "./ControllerConstants.sol";
  * The contract owner can change the swap fee on index pools, and can change the premium paid on swaps in the
  * unbound token seller contracts.
  */
-contract MarketCapSqrtController is MarketCapSortedTokenCategories, ControllerConstants {
+contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstants {
   using FixedPoint for FixedPoint.uq112x112;
   using FixedPoint for FixedPoint.uq144x112;
   using WeightingLibrary for FixedPoint.uq112x112;
