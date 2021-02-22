@@ -266,7 +266,8 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
   }
 
   /**
-   * @dev Sorts and filters the tokens in a category and applies the result to storage.
+   * @dev Returns the tokens and market caps in the category for `categoryID` after
+   * sorting and filtering the tokens according to the category's configuration.
    */
   function sortAndFilterTokens(uint256 categoryID)
     external
@@ -292,6 +293,9 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
 
 /* ==========  Market Cap Queries  ========== */
 
+  /**
+   * @dev Returns the tokens and market caps for `catego
+   */
   function getSortedAndFilteredTokensAndMarketCaps(uint256 categoryID)
     public
     view
@@ -400,6 +404,10 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
     tokens = _categories[categoryID].tokens;
   }
 
+  /**
+   * @dev Returns the top `count` tokens and market caps in the category for `categoryID`
+   * after sorting and filtering the tokens according to the category's configuration.
+   */
   function getTopCategoryTokensAndMarketCaps(uint256 categoryID, uint256 count)
     public
     view
