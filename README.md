@@ -1,4 +1,4 @@
-# @indexed-finance/indexed-core
+# @indexed-finance/sigma-core
 
 [Documentation](https://docs.indexed.finance)
 
