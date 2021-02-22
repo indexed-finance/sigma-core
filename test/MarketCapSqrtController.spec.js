@@ -11,7 +11,7 @@ const absDiff = (a, b) => {
   return a.sub(b).abs().toNumber();
 }
 
-describe('MarketCapSqrtController.sol', async () => {
+describe('SigmaControllerV1.sol', async () => {
   let controller, from, verifyRevert;
   let nonOwnerFaker, ownerFaker;
   let updatePrices, addLiquidityAll, liquidityManager;
