@@ -138,6 +138,9 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
     circulatingMarketCapOracle = ICirculatingMarketCapOracle(circulatingMarketCapOracle_);
   }
 
+  /**
+   * @dev Update the address of the circulating market cap oracle.
+   */
   function setCirculatingMarketCapOracle(address circulatingMarketCapOracle_) external onlyOwner {
     circulatingMarketCapOracle = ICirculatingMarketCapOracle(circulatingMarketCapOracle_);
   }
