@@ -2,7 +2,7 @@ const Logger = require('../lib/logger');
 const Deployer = require('../lib/deployer');
 const { sha3 } = require('../test/utils');
 
-const sellerImplementationID = sha3('UnboundTokenSeller.sol');
+const sellerImplementationID = sha3('SigmaUnboundTokenSellerV1.sol');
 
 module.exports = async (bre) => {
   const {
@@ -25,7 +25,7 @@ module.exports = async (bre) => {
   const uniswapOracle = await ethers.getContract('IndexedUniswapV2Oracle', signer);
   const controller = await ethers.getContract('controller');
 
-  const tokenSellerImplementation = await deploy('UnboundTokenSeller', 'tokenSellerImplementation', {
+  const tokenSellerImplementation = await deploy('SigmaUnboundTokenSellerV1', 'tokenSellerImplementation', {
     from: deployer,
     gas: 4000000,
     gasPrice,

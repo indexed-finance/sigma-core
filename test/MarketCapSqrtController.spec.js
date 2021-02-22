@@ -201,7 +201,7 @@ describe('MarketCapSqrtController.sol', async () => {
     expect(await pool.isPublicSwap()).to.be.true;
     const defaultPremium = await controller.defaultSellerPremium();
     const sellerAddress = await controller.computeSellerAddress(pool.address);
-    tokenSeller = await ethers.getContractAt('UnboundTokenSeller', sellerAddress);
+    tokenSeller = await ethers.getContractAt('SigmaUnboundTokenSellerV1', sellerAddress);
     expect(await tokenSeller.getPremiumPercent()).to.eq(defaultPremium);
   }
 
@@ -210,8 +210,8 @@ describe('MarketCapSqrtController.sol', async () => {
     if ((await controller.categoryIndex()).eq(0)) await setupCategory();
     const { events } = await controller.prepareIndexPool(1, size, toWei(ethValue), useSqrt ? 1 : 0, 'Test Index Pool', 'TIP').then(tx => tx.wait());
     const { args: { pool: poolAddress, initializer: initializerAddress } } = events.filter(e => e.event == 'NewPoolInitializer')[0];
-    pool = await ethers.getContractAt('IndexPool', poolAddress);
-    initializer = await ethers.getContractAt('PoolInitializer', initializerAddress);
+    pool = await ethers.getContractAt('SigmaIndexPoolV1', poolAddress);
+    initializer = await ethers.getContractAt('SigmaPoolInitializerV1', initializerAddress);
     return { poolAddress, initializerAddress };
   }
 
@@ -380,8 +380,8 @@ describe('MarketCapSqrtController.sol', async () => {
       poolSize = 4;
       const { events } = await controller.prepareIndexPool(1, 4, toWei(10), 1, 'Test Index Pool', 'TIP').then(tx => tx.wait());
       const { args: { pool: poolAddress, initializer: initializerAddress, categoryID, indexSize, formula } } = events.filter(e => e.event == 'NewPoolInitializer')[0];
-      pool = await ethers.getContractAt('IndexPool', poolAddress);
-      initializer = await ethers.getContractAt('PoolInitializer', initializerAddress);
+      pool = await ethers.getContractAt('SigmaIndexPoolV1', poolAddress);
+      initializer = await ethers.getContractAt('SigmaPoolInitializerV1', initializerAddress);
       expect(categoryID.eq(1)).to.be.true;
       expect(indexSize.eq(4)).to.be.true;
       expect(formula).to.eq(1);
@@ -424,7 +424,7 @@ describe('MarketCapSqrtController.sol', async () => {
       await setupCategory();
       const InitializerErrorTrigger = await ethers.getContractFactory('InitializerErrorTrigger');
       const initializerErrorTrigger = await InitializerErrorTrigger.deploy();
-      await proxyManager.setImplementationAddressManyToOne(sha3('PoolInitializer.sol'), initializerErrorTrigger.address);
+      await proxyManager.setImplementationAddressManyToOne(sha3('SigmaPoolInitializerV1.sol'), initializerErrorTrigger.address);
       const { poolAddress, initializerAddress } = await setupPool(2, 1);
       initializer = await ethers.getContractAt('InitializerErrorTrigger', initializerAddress);
       await verifyRejection(initializer, 'triggerArrLenError', /ERR_ARR_LEN/g);
@@ -435,7 +435,7 @@ describe('MarketCapSqrtController.sol', async () => {
       await fastForward(7200);
       await addLiquidityAll();
       await verifyRejection(initializer, 'triggerDuplicateInit', /ERR_INITIALIZED/g);
-      await proxyManager.setImplementationAddressManyToOne(sha3('PoolInitializer.sol'), initializerImplementation);
+      await proxyManager.setImplementationAddressManyToOne(sha3('SigmaPoolInitializerV1.sol'), initializerImplementation);
     });
   });
 

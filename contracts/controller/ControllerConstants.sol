@@ -13,13 +13,13 @@ contract ControllerConstants {
   uint256 public constant MIN_BALANCE = 1e6;
 
   // Identifier for the pool initializer implementation on the proxy manager.
-  bytes32 public constant INITIALIZER_IMPLEMENTATION_ID = keccak256("PoolInitializer.sol");
+  bytes32 public constant INITIALIZER_IMPLEMENTATION_ID = keccak256("SigmaPoolInitializerV1.sol");
 
   // Identifier for the unbound token seller implementation on the proxy manager.
-  bytes32 public constant SELLER_IMPLEMENTATION_ID = keccak256("UnboundTokenSeller.sol");
+  bytes32 public constant SELLER_IMPLEMENTATION_ID = keccak256("SigmaUnboundTokenSellerV1.sol");
 
   // Identifier for the index pool implementation on the proxy manager.
-  bytes32 public constant POOL_IMPLEMENTATION_ID = keccak256("IndexPool.sol");
+  bytes32 public constant POOL_IMPLEMENTATION_ID = keccak256("SigmaIndexPoolV1.sol");
 
   // Time between reweigh/reindex calls.
   uint256 public constant POOL_REWEIGH_DELAY = 1 weeks;

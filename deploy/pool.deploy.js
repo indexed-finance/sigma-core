@@ -2,7 +2,7 @@ const Logger = require('../lib/logger');
 const Deployer = require('../lib/deployer');
 const { sha3 } = require('../test/utils');
 
-const poolImplementationID = sha3('IndexPool.sol');
+const poolImplementationID = sha3('SigmaIndexPoolV1.sol');
 
 module.exports = async (bre) => {
   const {
@@ -22,7 +22,7 @@ module.exports = async (bre) => {
 
   const proxyManager = await ethers.getContract('proxyManager', signer);
 
-  const poolImplementation = await deploy('IndexPool', 'poolImplementation', {
+  const poolImplementation = await deploy('SigmaIndexPoolV1', 'poolImplementation', {
     from: deployer,
     gas: 4000000,
     gasPrice,
@@ -38,4 +38,4 @@ module.exports = async (bre) => {
   logger.success(`Created implementation for pool`);
 };
 
-module.exports.tags = ['IndexPool'];
+module.exports.tags = ['SigmaIndexPoolV1'];
