@@ -521,7 +521,7 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
 
   function computeWeights(WeightingFormula formula, uint256[] memory marketCaps)
     public
-    view
+    pure
     returns (FixedPoint.uq112x112[] memory fractionalWeights)
   {
     uint256 len = marketCaps.length;
