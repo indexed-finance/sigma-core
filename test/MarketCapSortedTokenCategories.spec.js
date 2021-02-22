@@ -407,10 +407,13 @@ describe('MarketCapSortedTokenCategories.sol', () => {
         await makeCategory(true, expectCaps[expectCaps.length - 1].add(1), expectCaps[0].sub(1));
         await categories.addTokens(1, tokens);
         await categories.sortAndFilterTokens(1);
-        expectTokens.pop();
-        expectTokens.shift();
+        const removed = [];
+        removed.push(expectTokens.pop());
+        removed.push(expectTokens.shift());
         const realTokens = await categories.getCategoryTokens(1);
         expect(realTokens).to.deep.eq(expectTokens);
+        expect(await categories.isTokenInCategory(1, removed[0])).to.be.false;
+        expect(await categories.isTokenInCategory(1, removed[1])).to.be.false;
       })
     })
   })

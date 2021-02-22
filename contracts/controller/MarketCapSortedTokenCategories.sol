@@ -265,12 +265,28 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
     circulatingMarketCapOracle.updateCirculatingMarketCaps(category.tokens);
   }
 
+  /**
+   * @dev Sorts and filters the tokens in a category and applies the result to storage.
+   */
   function sortAndFilterTokens(uint256 categoryID)
     external
     validCategory(categoryID)
   {
-    (address[] memory categoryTokens,) = getSortedAndFilteredTokensAndMarketCaps(categoryID);
-    _categories[categoryID].tokens = categoryTokens;
+    Category storage category = _categories[categoryID];
+    address[] memory tokens = category.tokens;
+    uint256[] memory marketCaps = getMarketCaps(category.useFullyDilutedMarketCaps, tokens);
+    address[] memory removedTokens = TokenSortLibrary.sortAndFilterReturnRemoved(
+      tokens,
+      marketCaps,
+      category.minMarketCap,
+      category.maxMarketCap
+    );
+    _categories[categoryID].tokens = tokens;
+    for (uint256 i = 0; i < removedTokens.length; i++) {
+      address token = removedTokens[i];
+      category.isIncludedToken[token] = false;
+      emit TokenRemoved(token, categoryID);
+    }
   }
 
 
