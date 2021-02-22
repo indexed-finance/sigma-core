@@ -87,7 +87,18 @@ interface ISigmaControllerV1 {
 
   function updateCategoryPrices(uint256 categoryID) external;
 
-  function createCategory(bytes32 metadataHash) external;
+  function updateCategoryMarketCaps(uint256 categoryID) external;
+
+  function sortAndFilterTokens(uint256 categoryID) external;
+
+  function createCategory(
+    bytes32 metadataHash,
+    bool useFullyDilutedMarketCaps,
+    uint112 minMarketCap,
+    uint112 maxMarketCap
+  ) external;
+
+  function setCirculatingMarketCapOracle(address circulatingMarketCapOracle_) external;
 
   function addToken(uint256 categoryID, address token) external;
 
@@ -99,23 +110,49 @@ interface ISigmaControllerV1 {
 
 /* ========== Views ========== */
 
-  function categoryIndex() external view returns (uint256);
+  function getSortedAndFilteredTokensAndMarketCaps(uint256 categoryID)
+    external
+    view
+    returns (
+      address[] memory categoryTokens,
+      uint256[] memory marketCaps
+    );
 
-  function oracle() external view returns (IIndexedUniswapV2Oracle);
+  function getFullyDilutedMarketCaps(address[] memory tokens)
+    external
+    view
+    returns (uint256[] memory marketCaps);
+  
+  function getCirculatingMarketCaps(address[] memory tokens)
+    external
+    view
+    returns (uint256[] memory marketCaps);
 
-  function computeAverageMarketCap(address token) external view returns (uint144);
-
-  function computeAverageMarketCaps(address[] calldata tokens) external view returns (uint144[] memory);
+  function getMarketCaps(bool useFullyDilutedMarketCaps, address[] memory tokens)
+    external
+    view
+    returns (uint256[] memory marketCaps);
 
   function hasCategory(uint256 categoryID) external view returns (bool);
 
-  function getLastCategoryUpdate(uint256 categoryID) external view returns (uint256);
-
   function isTokenInCategory(uint256 categoryID, address token) external view returns (bool);
 
-  function getCategoryTokens(uint256 categoryID) external view returns (address[] memory);
+  function getCategoryTokens(uint256 categoryID) external view returns (address[] memory tokens);
 
-  function getCategoryMarketCaps(uint256 categoryID) external view returns (uint144[] memory);
+  function getTopCategoryTokensAndMarketCaps(uint256 categoryID, uint256 count)
+    external
+    view
+    returns (
+      address[] memory categoryTokens,
+      uint256[] memory marketCaps
+    );
 
-  function getTopCategoryTokens(uint256 categoryID, uint256 num) external view returns (address[] memory);
+  function getCategoryConfig(uint256 categoryID)
+    external
+    view
+    returns (
+      bool useFullyDilutedMarketCaps,
+      uint112 minMarketCap,
+      uint112 maxMarketCap
+    );
 }
