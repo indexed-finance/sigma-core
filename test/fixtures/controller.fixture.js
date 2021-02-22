@@ -38,10 +38,10 @@ const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
   const circuitBreaker = deployer;
 
   // Deploy pool controller
-  const controllerImplementation = await deploy('MarketCapSqrtController', uniswapOracle.address, poolFactory.address, proxyManager.address, feeRecipient);
+  const controllerImplementation = await deploy('SigmaControllerV1', uniswapOracle.address, poolFactory.address, proxyManager.address, feeRecipient);
   const controllerAddress = await proxyManager.computeProxyAddressOneToOne(deployer, controllerImplementationSalt);
   await proxyManager.deployProxyOneToOne(controllerImplementationSalt, controllerImplementation.address);
-  const controller = await ethers.getContractAt('MarketCapSqrtController', controllerAddress);
+  const controller = await ethers.getContractAt('SigmaControllerV1', controllerAddress);
   await controller[`initialize(address,address)`](circulatingCapOracle.address, circuitBreaker);
 
   const tokenSellerImplementation = await deploy('SigmaUnboundTokenSellerV1', uniswapRouter.address, uniswapOracle.address);
