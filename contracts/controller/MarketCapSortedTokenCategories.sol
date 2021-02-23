@@ -53,9 +53,6 @@ contract MarketCapSortedTokenCategories is OwnableProxy {
   uint32 public constant SHORT_TWAP_MIN_TIME_ELAPSED = 20 minutes;
   uint32 public constant SHORT_TWAP_MAX_TIME_ELAPSED = 2 days;
 
-  // Maximum time between a category being sorted and a query for the top n tokens
-  uint256 public constant MAX_SORT_DELAY = 1 days;
-
   // Maximum number of tokens in a category
   uint256 public constant MAX_CATEGORY_TOKENS = 25;
 
