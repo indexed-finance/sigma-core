@@ -27,6 +27,7 @@ contract ControllerConstants {
   // The number of reweighs which occur before a pool is re-indexed.
   uint8 public constant REWEIGHS_BEFORE_REINDEX = 3;
 
-  // Default total weight for a pool.
-  uint256 public constant WEIGHT_MULTIPLIER = 25e18;
+  // TWAP parameters for assessing current price
+  uint32 public constant SHORT_TWAP_MIN_TIME_ELAPSED = 20 minutes;
+  uint32 public constant SHORT_TWAP_MAX_TIME_ELAPSED = 2 days;
 }
