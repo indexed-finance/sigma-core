@@ -3,13 +3,9 @@ pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
 /* ========== External Interfaces ========== */
-import "@indexed-finance/uniswap-v2-oracle/contracts/interfaces/IIndexedUniswapV2Oracle.sol";
 import "@indexed-finance/proxies/contracts/interfaces/IDelegateCallProxyManager.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /* ========== External Libraries ========== */
-import "@indexed-finance/uniswap-v2-oracle/contracts/lib/PriceLibrary.sol";
-import "@indexed-finance/uniswap-v2-oracle/contracts/lib/FixedPoint.sol";
 import "@indexed-finance/proxies/contracts/SaltyLib.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 
@@ -20,10 +16,10 @@ import "../interfaces/IPoolInitializer.sol";
 import "../interfaces/IUnboundTokenSeller.sol";
 
 /* ========== Internal Libraries ========== */
-import "../lib/WeightingLibrary.sol";
+import "../lib/ScoreLibrary.sol";
 
 /* ========== Internal Inheritance ========== */
-import "./MarketCapSortedTokenCategories.sol";
+import "./ScoredTokenLists.sol";
 import "./ControllerConstants.sol";
 
 
@@ -35,9 +31,9 @@ import "./ControllerConstants.sol";
  * controls such as pausing public swaps and managing fee configuration.
  *
  * ===== Pool Configuration =====
- * When an index pool is deployed, it is assigned a category, a size and a weighting formula.
+ * When an index pool is deployed, it is assigned a token list, a size and a weighting formula.
  *
- * The category is the list of tokens and configuration used for selecting assets, which is
+ * The token list is the set of tokens and configuration used for selecting assets, which is
  * detailed in the documentation for the categories contract.
  * The size is the target number of underlying assets held by the pool, it is used to determine
  * which assets the pool will hold.
@@ -46,7 +42,8 @@ import "./ControllerConstants.sol";
  * ===== Weighting Formulae =====
  * There are currently two weighting formulae supported: proportional and sqrt.
  * The weighting formulae are used to compute weights from the market caps of the tokens, which
- * will either be circulating or fully diluted market caps according to the pool's category configuration.
+ * will either be circulating or fully diluted market caps according to the pool's candidate list
+ * configuration.
  *
  * Proportional weighting assigns a weight to each token equal to the fraction of its market cap relative
  * to the sum of token market caps.
@@ -77,12 +74,10 @@ import "./ControllerConstants.sol";
  * The contract owner can change the swap fee on index pools, and can change the premium paid on swaps in the
  * unbound token seller contracts.
  */
-contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstants {
-  using FixedPoint for FixedPoint.uq112x112;
-  using FixedPoint for FixedPoint.uq144x112;
-  using WeightingLibrary for FixedPoint.uq112x112;
+contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
+  using ScoreLibrary for uint256[];
+  using ScoreLibrary for uint256;
   using SafeMath for uint256;
-  using PriceLibrary for PriceLibrary.TwoWayAveragePrice;
 
 /* ==========  Constants  ========== */
   // Pool factory contract
@@ -100,7 +95,7 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
   event PoolInitialized(
     address pool,
     address unboundTokenSeller,
-    uint256 categoryID,
+    uint256 listID,
     uint256 indexSize
   );
 
@@ -108,9 +103,8 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
   event NewPoolInitializer(
     address pool,
     address initializer,
-    uint256 categoryID,
-    uint256 indexSize,
-    WeightingFormula formula
+    uint256 listID,
+    uint256 indexSize
   );
 
 /* ==========  Structs  ========== */
@@ -129,30 +123,25 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
    *
    * The struct fields are assigned their respective integer sizes so
    * that solc can pack the entire struct into a single storage slot.
-   * `reweighIndex` is intended to overflow, `categoryID` will never
+   * `reweighIndex` is intended to overflow, `listID` will never
    * reach 2**16, `indexSize` is capped at 10 and it is unlikely that
    * this protocol will be in use in the year 292277026596 (unix time
    * for 2**64 - 1).
    *
    * @param initialized Whether the pool has been initialized with the
    * starting balances.
-   * @param categoryID Category identifier for the pool.
+   * @param listID Token list identifier for the pool.
    * @param indexSize Number of tokens the pool should hold.
-   * @param reweighIndex Number of times the pool has either re-weighed
-   * or re-indexed.
-   * @param lastReweigh Timestamp of last pool re-weigh or re-index.
-   * @param formula Specifies the formula to use for weighting
+   * @param reweighIndex Number of times the pool has either re-weighed or re-indexed
+   * @param lastReweigh Timestamp of last pool re-weigh or re-index
    */
   struct IndexPoolMeta {
     bool initialized;
-    uint16 categoryID;
+    uint16 listID;
     uint8 indexSize;
     uint8 reweighIndex;
     uint64 lastReweigh;
-    WeightingFormula formula;
   }
-
-  enum WeightingFormula { Proportional, Sqrt }
 
 /* ==========  Storage  ========== */
 
@@ -167,8 +156,19 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
 
 /* ========== Modifiers ========== */
 
-  modifier _havePool(address pool) {
-    require(indexPoolMetadata[pool].initialized, "ERR_POOL_NOT_FOUND");
+  modifier isInitializedPool(address poolAddress) {
+    require(
+      indexPoolMetadata[poolAddress].initialized,
+      "ERR_POOL_NOT_FOUND"
+    );
+    _;
+  }
+
+  modifier onlyInitializer(address poolAddress) {
+    require(
+      msg.sender == computeInitializerAddress(poolAddress),
+      "ERR_NOT_PRE_DEPLOY_POOL"
+    );
     _;
   }
 
@@ -185,7 +185,7 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
     address defaultExitFeeRecipient_
   )
     public
-    MarketCapSortedTokenCategories(uniswapOracle_)
+    ScoredTokenLists(uniswapOracle_)
   {
     poolFactory = poolFactory_;
     proxyManager = proxyManager_;
@@ -198,9 +198,9 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
    * @dev Initialize the controller with the owner address and default seller premium.
    * This sets up the controller which is deployed as a singleton proxy.
    */
-  function initialize(address circulatingMarketCapOracle_, address circuitBreaker_) public {
+  function initialize(address circuitBreaker_) public {
+    super.initialize();
     defaultSellerPremium = 2;
-    super.initialize(circulatingMarketCapOracle_);
     circuitBreaker = circuitBreaker_;
   }
 
@@ -231,10 +231,9 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
    * to initialize it.
    */
   function prepareIndexPool(
-    uint256 categoryID,
+    uint256 listID,
     uint256 indexSize,
     uint256 initialWethValue,
-    WeightingFormula formula,
     string calldata name,
     string calldata symbol
   )
@@ -248,17 +247,16 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
 
     poolAddress = poolFactory.deployPool(
       POOL_IMPLEMENTATION_ID,
-      keccak256(abi.encodePacked(categoryID, indexSize))
+      keccak256(abi.encodePacked(listID, indexSize))
     );
     IIndexPool(poolAddress).configure(address(this), name, symbol);
 
     indexPoolMetadata[poolAddress] = IndexPoolMeta({
       initialized: false,
-      categoryID: uint16(categoryID),
+      listID: uint16(listID),
       indexSize: uint8(indexSize),
       lastReweigh: 0,
-      reweighIndex: 0,
-      formula: formula
+      reweighIndex: 0
     });
 
     initializerAddress = proxyManager.deployProxyManyToOne(
@@ -270,8 +268,7 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
 
     // Get the initial tokens and balances for the pool.
     (address[] memory tokens, uint256[] memory balances) = getInitialTokensAndBalances(
-      categoryID,
-      formula,
+      listID,
       indexSize,
       uint144(initialWethValue)
     );
@@ -281,9 +278,8 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
     emit NewPoolInitializer(
       poolAddress,
       initializerAddress,
-      categoryID,
-      indexSize,
-      formula
+      listID,
+      indexSize
     );
   }
 
@@ -300,32 +296,23 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
     address poolAddress,
     address[] calldata tokens,
     uint256[] calldata balances
-  ) external {
-    require(
-      msg.sender == computeInitializerAddress(poolAddress),
-      "ERR_NOT_PRE_DEPLOY_POOL"
-    );
+  )
+    external
+    onlyInitializer(poolAddress)
+  {
     uint256 len = tokens.length;
     require(balances.length == len, "ERR_ARR_LEN");
 
     IndexPoolMeta memory meta = indexPoolMetadata[poolAddress];
     require(!meta.initialized, "ERR_INITIALIZED");
-    uint96[] memory denormalizedWeights = new uint96[](len);
-    uint256 valueSum;
-    uint144[] memory ethValues = uniswapOracle.computeAverageEthForTokens(
+
+    uint256[] memory ethValues = uniswapOracle.computeAverageEthForTokens(
       tokens,
       balances,
       SHORT_TWAP_MIN_TIME_ELAPSED,
       SHORT_TWAP_MAX_TIME_ELAPSED
     );
-    for (uint256 i = 0; i < len; i++) {
-      valueSum = valueSum.add(ethValues[i]);
-    }
-    for (uint256 i = 0; i < len; i++) {
-      denormalizedWeights[i] = _safeUint96(
-        uint256(ethValues[i]).mul(WEIGHT_MULTIPLIER).div(valueSum)
-      );
-    }
+    uint96[] memory denormalizedWeights = ethValues.computeDenormalizedWeights();
 
     address sellerAddress = proxyManager.deployProxyManyToOne(
       SELLER_IMPLEMENTATION_ID,
@@ -354,7 +341,7 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
     emit PoolInitialized(
       poolAddress,
       sellerAddress,
-      meta.categoryID,
+      meta.listID,
       meta.indexSize
     );
   }
@@ -372,7 +359,7 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
   /**
    * @dev Sets the swap fee on an index pool.
    */
-  function setSwapFee(address poolAddress, uint256 swapFee) external onlyOwner _havePool(poolAddress) {
+  function setSwapFee(address poolAddress, uint256 swapFee) external onlyOwner isInitializedPool(poolAddress) {
     IIndexPool(poolAddress).setSwapFee(swapFee);
   }
 
@@ -381,17 +368,17 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
    * useful when the token's price on the pool is too low relative to
    * external prices for people to trade it in.
    */
-  function updateMinimumBalance(IIndexPool pool, address tokenAddress) external _havePool(address(pool)) {
-    IIndexPool.Record memory record = pool.getTokenRecord(tokenAddress);
+  function updateMinimumBalance(address pool, address tokenAddress) external isInitializedPool(address(pool)) {
+    IIndexPool.Record memory record = IIndexPool(pool).getTokenRecord(tokenAddress);
     require(!record.ready, "ERR_TOKEN_READY");
     uint256 poolValue = _estimatePoolValue(pool);
-    PriceLibrary.TwoWayAveragePrice memory price = uniswapOracle.computeTwoWayAveragePrice(
+    uint256 minimumBalance = uniswapOracle.computeAverageTokensForEth(
       tokenAddress,
+      poolValue / 100,
       SHORT_TWAP_MIN_TIME_ELAPSED,
       SHORT_TWAP_MAX_TIME_ELAPSED
     );
-    uint256 minimumBalance = price.computeAverageTokensForEth(poolValue) / 100;
-    pool.setMinimumBalance(tokenAddress, minimumBalance);
+    IIndexPool(pool).setMinimumBalance(tokenAddress, minimumBalance);
   }
 
   /**
@@ -404,7 +391,7 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
   )
     external
     onlyOwner
-    _havePool(pool)
+    isInitializedPool(pool)
   {
     IIndexPool(pool).delegateCompLikeToken(token, delegatee);
   }
@@ -413,7 +400,7 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
    * @dev Enable/disable public swaps on an index pool.
    * Callable by the contract owner and the `circuitBreaker` address.
    */
-  function setPublicSwap(address indexPool_, bool publicSwap) external _havePool(indexPool_) {
+  function setPublicSwap(address indexPool_, bool publicSwap) external isInitializedPool(indexPool_) {
     require(
       msg.sender == circuitBreaker || msg.sender == owner(),
       "ERR_NOT_AUTHORIZED"
@@ -425,7 +412,7 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
 
   /**
    * @dev Re-indexes a pool by setting the underlying assets to the top
-   * tokens in its category by market cap.
+   * tokens in its candidates list by market cap.
    */
   function reindexPool(address poolAddress) external {
     IndexPoolMeta storage meta = indexPoolMetadata[poolAddress];
@@ -450,34 +437,22 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
     _reindexPool(meta, poolAddress);
   }
 
-  function _reindexPool(
-    IndexPoolMeta storage meta,
-    address poolAddress
-  ) internal {
+  function _reindexPool(IndexPoolMeta storage meta, address poolAddress) internal {
     uint256 size = meta.indexSize;
-    (address[] memory tokens, uint256[] memory marketCaps) = getTopCategoryTokensAndMarketCaps(
-      meta.categoryID, size
-    );
-  
-    PriceLibrary.TwoWayAveragePrice[] memory prices = uniswapOracle.computeTwoWayAveragePrices(
-      tokens,
-      LONG_TWAP_MIN_TIME_ELAPSED,
-      LONG_TWAP_MAX_TIME_ELAPSED
-    );
-
-    uint256[] memory minimumBalances = new uint256[](size);
-    uint96[] memory denormalizedWeights = WeightingLibrary.denormalizeFractionalWeights(
-      computeWeights(meta.formula, marketCaps)
-    );
-    uint144 totalValue = _estimatePoolValue(IIndexPool(poolAddress));
-
-    for (uint256 i = 0; i < size; i++) {
-      // The minimum balance is the number of tokens worth the minimum weight
-      // of the pool. The minimum weight is 1/100, so we divide the total value
-      // by 100 to get the desired weth value, then multiply by the price of eth
-      // in terms of that token to get the minimum balance.
-      minimumBalances[i] = prices[i].computeAverageTokensForEth(totalValue) / 100;
+    (address[] memory tokens, uint256[] memory scores) = getTopTokensAndScores(meta.listID, size);
+    uint256 wethValue = _estimatePoolValue(poolAddress);
+    uint256 minValue = wethValue / 100;
+    uint256[] memory ethValues = new uint256[](size);
+    for (uint256 i = 0; i < size; i++){
+      ethValues[i] = minValue;
     }
+    uint256[] memory minimumBalances = uniswapOracle.computeAverageTokensForEth(
+      tokens,
+      ethValues,
+      SHORT_TWAP_MIN_TIME_ELAPSED,
+      SHORT_TWAP_MAX_TIME_ELAPSED
+    );
+    uint96[] memory denormalizedWeights = scores.computeDenormalizedWeights();
 
     meta.lastReweigh = uint64(now);
 
@@ -506,31 +481,15 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
       "ERR_REWEIGH_INDEX"
     );
 
-    Category storage category = _categories[meta.categoryID];
+    TokenList storage list = _lists[meta.listID];
 
     address[] memory tokens = IIndexPool(poolAddress).getCurrentDesiredTokens();
-    uint256[] memory marketCaps = getMarketCaps(category.useFullyDilutedMarketCaps, tokens);
-    uint96[] memory denormalizedWeights = WeightingLibrary.denormalizeFractionalWeights(
-      computeWeights(meta.formula, marketCaps)
-    );
+    uint256[] memory scores = IScoringStrategy(list.scoringStrategy).getTokenScores(tokens);
+    uint96[] memory denormalizedWeights = scores.computeDenormalizedWeights();
 
     meta.lastReweigh = uint64(now);
     indexPoolMetadata[poolAddress] = meta;
     IIndexPool(poolAddress).reweighTokens(tokens, denormalizedWeights);
-  }
-
-  function computeWeights(WeightingFormula formula, uint256[] memory marketCaps)
-    public
-    pure
-    returns (FixedPoint.uq112x112[] memory fractionalWeights)
-  {
-    uint256 len = marketCaps.length;
-    fractionalWeights = new FixedPoint.uq112x112[](len);
-    if (formula == WeightingFormula.Proportional) {
-      fractionalWeights = WeightingLibrary.weightProportionally(marketCaps);
-    } else {
-      fractionalWeights = WeightingLibrary.weightBySqrt(marketCaps);
-    }
   }
 
 /* ==========  Pool Queries  ========== */
@@ -570,7 +529,7 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
   /**
    * @dev Compute the create2 address for a pool.
    */
-  function computePoolAddress(uint256 categoryID, uint256 indexSize)
+  function computePoolAddress(uint256 listID, uint256 indexSize)
     public
     view
     returns (address poolAddress)
@@ -581,21 +540,20 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
       POOL_IMPLEMENTATION_ID,
       keccak256(abi.encodePacked(
         address(this),
-        keccak256(abi.encodePacked(categoryID, indexSize))
+        keccak256(abi.encodePacked(listID, indexSize))
       ))
     );
   }
 
   /**
-   * @dev Queries the top `indexSize` tokens in a category from the market oracle,
+   * @dev Queries the top `indexSize` tokens in a list from the market oracle,
    * computes their relative weights and determines the weighted balance of each
    * token to meet a specified total value.
    */
   function getInitialTokensAndBalances(
-    uint256 categoryID,
-    WeightingFormula formula,
+    uint256 listID,
     uint256 indexSize,
-    uint144 wethValue
+    uint256 wethValue
   )
     public
     view
@@ -604,19 +562,18 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
       uint256[] memory balances
     )
   {
-    uint256[] memory marketCaps;
-    (tokens, marketCaps) = getTopCategoryTokensAndMarketCaps(categoryID, indexSize);
-    PriceLibrary.TwoWayAveragePrice[] memory prices = uniswapOracle.computeTwoWayAveragePrices(
+    uint256[] memory scores;
+    (tokens, scores) = getTopTokensAndScores(listID, indexSize);
+    uint256[] memory relativeEthValues = wethValue.computeProportionalAmounts(scores);
+    balances = uniswapOracle.computeAverageTokensForEth(
       tokens,
-      LONG_TWAP_MIN_TIME_ELAPSED,
-      LONG_TWAP_MAX_TIME_ELAPSED
+      relativeEthValues,
+      SHORT_TWAP_MIN_TIME_ELAPSED,
+      SHORT_TWAP_MAX_TIME_ELAPSED
     );
-    FixedPoint.uq112x112[] memory weights = computeWeights(formula, marketCaps);
-    balances = new uint256[](indexSize);
-    for (uint256 i = 0; i < indexSize; i++) {
-      uint256 targetBalance = prices[i].computeAverageTokensForEth(weights[i].mul(wethValue).decode144());
-      require(targetBalance >= MIN_BALANCE, "ERR_MIN_BALANCE");
-      balances[i] = targetBalance;
+    uint256 len = balances.length;
+    for (uint256 i = 0; i < len; i++) {
+      require(balances[i] >= MIN_BALANCE, "ERR_MIN_BALANCE");
     }
   }
 
@@ -627,20 +584,13 @@ contract SigmaControllerV1 is MarketCapSortedTokenCategories, ControllerConstant
    * "virtual balance" (balance * (totalWeight/weight)) and multiplying
    * by that token's average ether price from UniSwap.
    */
-  function _estimatePoolValue(IIndexPool pool) internal view returns (uint144) {
-    (address token, uint256 value) = pool.extrapolatePoolValueFromToken();
+  function _estimatePoolValue(address pool) internal view returns (uint256) {
+    (address token, uint256 value) = IIndexPool(pool).extrapolatePoolValueFromToken();
     return uniswapOracle.computeAverageEthForTokens(
       token,
       value,
       SHORT_TWAP_MIN_TIME_ELAPSED,
       SHORT_TWAP_MAX_TIME_ELAPSED
     );
-  }
-
-
-
-  function _safeUint96(uint256 x) internal pure returns (uint96 y) {
-    y = uint96(x);
-    require(y == x, "ERR_MAX_UINT96");
   }
 }
