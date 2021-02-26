@@ -21,28 +21,31 @@ const toLiquidityAmounts = ({ price, marketcap }, init = false) => {
 
 const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
   const { deployer, feeRecipient } = await getNamedAccounts();
-  const [ signer, signer2 ] = await ethers.getSigners();
+  const [ signer, signer1, signer2 ] = await ethers.getSigners();
   const uniswapResult = await deployments.createFixture(uniswapFixture)();
   const { uniswapRouter, uniswapOracle, deployTokenAndMarket, addLiquidity, updatePrices } = uniswapResult;
 
   const deploy = async (name, ...args) => (await ethers.getContractFactory(name, signer)).deploy(...args);
 
-  // ------- Uniswap Oracles -------
-  // Deploy UniSwap oracles
+  // Deploy proxy manager
   const proxyManager = await deploy('DelegateCallProxyManager');
 
   // Deploy pool factory
   const poolFactory = await deploy('PoolFactory', proxyManager.address);
 
   const circulatingCapOracle = await deploy('MockCirculatingCapOracle');
-  const circuitBreaker = deployer;
+  const circuitBreaker = await signer1.getAddress();
+  const fdvScoring = await deploy('ScoreByFDV', uniswapOracle.address);
+  const fdvSqrtScoring = await deploy('ScoreBySqrtFDV', uniswapOracle.address);
+  const cmcScoring = await deploy('ScoreByCMC', circulatingCapOracle.address);
+  const cmcSqrtScoring = await deploy('ScoreBySqrtCMC', circulatingCapOracle.address);
 
   // Deploy pool controller
   const controllerImplementation = await deploy('SigmaControllerV1', uniswapOracle.address, poolFactory.address, proxyManager.address, feeRecipient);
   const controllerAddress = await proxyManager.computeProxyAddressOneToOne(deployer, controllerImplementationSalt);
   await proxyManager.deployProxyOneToOne(controllerImplementationSalt, controllerImplementation.address);
   const controller = await ethers.getContractAt('SigmaControllerV1', controllerAddress);
-  await controller[`initialize(address,address)`](circulatingCapOracle.address, circuitBreaker);
+  await controller[`initialize(address)`](circuitBreaker);
 
   const tokenSellerImplementation = await deploy('SigmaUnboundTokenSellerV1', uniswapRouter.address, uniswapOracle.address);
   await proxyManager.createManyToOneProxyRelationship(
@@ -100,6 +103,7 @@ const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
 
   return {
     ...uniswapResult,
+    circuitBreaker: signer1,
     circulatingCapOracle,
     wrappedTokens,
     proxyManager,
@@ -110,7 +114,11 @@ const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
     nonOwnerFaker,
     addLiquidityAll,
     ownerFaker,
-    initializerImplementation: poolInitializerImplementation.address
+    initializerImplementation: poolInitializerImplementation.address,
+    fdvScoring,
+    fdvSqrtScoring,
+    cmcScoring,
+    cmcSqrtScoring
   };
 };
 
