@@ -21,7 +21,7 @@
     "clean:build": "rimraf ./artifacts && rimraf ./cache && npm run clean:temp",
     "clean:temp": "buidler-verify-helper --clean",
     "prepare-build": "npm run clean:build && buidler-verify-helper --prepare",
-    "prepare:controller": "yarn prepare-build --contracts MarketCapSqrtController",
+    "prepare:controller": "yarn prepare-build --contracts SigmaControllerV1",
     "prepare:seller": "yarn prepare-build --contracts SigmaUnboundTokenSellerV1",
     "prepare:pool": "yarn prepare-build --contracts SigmaIndexPoolV1",
     "prepare:initializer": "yarn prepare-build --contracts SigmaPoolInitializerV1",
