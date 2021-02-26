@@ -17,27 +17,21 @@ import "../OwnableProxy.sol";
  * @title ScoredTokenLists
  * @author d1ll0n
  *
- * @dev This contract stores token categories created by the contract owner.
+ * @dev This contract stores token lists sorted and filtered using arbitrary scoring strategies.
  *
- * ===== Token Categories =====
- * Each category is a list of tokens with a configuration for the minimum and maximum
- * market caps of included tokens, as well as a field indicating whether circulating
- * or fully diluted market caps are used.
+ * Each token list contains an array of tokens, a scoring strategy address, minimum and maximum
+ * scores for the list, and a mapping for which tokens are included.
  *
- * Token categories are sorted in descending order of the market caps of their tokens,
- * and filtered using the configured min/max bounds.
+ * A scoring strategy is a smart contract which implements the `getTokenScores`, which scores
+ * tokens using an arbitrary methodology.
  *
- * The contract owner can create a new token category with a metadata hash used to query
- * additional details about its purpose and inclusion criteria.
+ * Token lists are sorted in descending order by the scores returned by the list's scoring strategy,
+ * and filtered according to the minimum/maximum scores.
  *
- * The owner can add and remove tokens from the categories at will.
+ * The contract owner can create a new token list with a metadata hash used to query
+ * additional details about its purpose and inclusion criteria from IPFS.
  *
- * ===== Market Caps =====
- * Fully diluted market caps are extrapolated by multiplying tokens' total supplies
- * by their moving average weth prices on UniSwap.
- *
- * Circulating market caps are queried from an external oracle which is configured
- * by the owner.
+ * The owner can add and remove tokens from the lists.
  */
 contract ScoredTokenLists is OwnableProxy {
   using ScoreLibrary for address[];
