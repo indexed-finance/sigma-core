@@ -12,7 +12,7 @@ const absDiff = (a, b) => {
 }
 
 describe('SigmaControllerV1.sol', async () => {
-  let controller, from, verifyRevert;
+  let controller, from, circuitBreaker, verifyRevert;
   let nonOwnerFaker, ownerFaker;
   let updatePrices, addLiquidityAll, liquidityManager;
   let sortedWrappedTokens;
@@ -21,11 +21,13 @@ describe('SigmaControllerV1.sol', async () => {
   let poolSize;
   let notOwner;
   let circulatingCapOracle;
+  let fdvScoring, fdvSqrtScoring, cmcScoring, cmcSqrtScoring;
 
   const setupTests = (options = {}) => {
 
     before(async () => {
       ({
+        circuitBreaker,
         poolFactory,
         proxyManager,
         circulatingCapOracle,
@@ -39,7 +41,11 @@ describe('SigmaControllerV1.sol', async () => {
         addLiquidity,
         ownerFaker,
         initializerImplementation,
-        liquidityManager
+        liquidityManager,
+        fdvScoring,
+        fdvSqrtScoring,
+        cmcScoring,
+        cmcSqrtScoring
       } = await deployments.createFixture(controllerFixture)());
       const defaultOptions = {
         init: false,
@@ -75,44 +81,54 @@ describe('SigmaControllerV1.sol', async () => {
           return 0;
         });
       }
-      if (category) await setupCategory(useFullyDiluted);
+      if (category) await setupCategory(useFullyDiluted, useSqrt);
       if (pool) await setupPool(size, ethValue, useSqrt);
       if (init) await finishInitializer();
-      [,notOwner] = await ethers.getSigners();
+      [,,notOwner] = await ethers.getSigners();
     });
+  }
+
+  const getMarketCaps = (_tokens, useFullyDiluted = true) => {
+    if (useFullyDiluted) {
+      return Promise.all(_tokens.map(
+        async (token) => liquidityManager.getTokenValue(
+          token,
+          await (await ethers.getContractAt('IERC20', token)).totalSupply()
+        )
+      ));
+    } else {
+      return circulatingCapOracle.getCirculatingMarketCaps(_tokens);
+    }
   }
 
   const sortTokens = async (fullyDiluted = true) => {
     await updatePrices(wrappedTokens);
     const t = [ ...wrappedTokens ];
-    const caps = await controller.getMarketCaps(fullyDiluted, t.map(_ => _.address));
+    const caps = await getMarketCaps(t.map(_ => _.address), fullyDiluted);
     caps.forEach((cap, i) => t[i].marketCap = cap);
     sortedWrappedTokens = t.sort((a, b) => {
       if (a.marketCap.lt(b.marketCap)) return 1;
       if (a.marketCap.gt(b.marketCap)) return -1;
       return 0;
     });
-    // await controller.sortAndFilterTokens(1);
   }
 
   const getMarketCapSqrts = async (_tokens, fullyDiluted = true) => {
-    const actualMarketCaps = await controller.getMarketCaps(fullyDiluted, _tokens.map(t => t.address));
+    const actualMarketCaps = await getMarketCaps(_tokens.map(_ => _.address), fullyDiluted);
     const capSqrts = actualMarketCaps.map(sqrt);
     const sqrtSum = capSqrts.reduce((total, capSqrt) => total.add(capSqrt), BigNumber.from(0));
     return [capSqrts, sqrtSum];
   }
 
   const getExpectedTokensAndBalances = async (numTokens, ethValue, useSqrt = true, fullyDiluted = true) => {
-    await addLiquidityAll();
-    await fastForward(7200);
-    await updatePrices(sortedWrappedTokens);
+    // await addLiquidityAll();
     const expectedTokens = sortedWrappedTokens.slice(0, numTokens);
     let weightedEthValues = [];
     if (useSqrt) {
       const [capSqrts, sqrtSum] = await getMarketCapSqrts(expectedTokens, fullyDiluted);
       weightedEthValues = capSqrts.map((rt) => rt.mul(ethValue).div(sqrtSum));
     } else {
-      const mcaps = await controller.getMarketCaps(fullyDiluted, expectedTokens.map(t => t.address));
+      const mcaps = await getMarketCaps(expectedTokens.map(t => t.address), fullyDiluted);
       const mcapSum = mcaps.reduce((t, m) => t.add(m), BigNumber.from(0));
       weightedEthValues = mcaps.map((rt) => rt.mul(ethValue).div(mcapSum));
     }
@@ -123,10 +139,18 @@ describe('SigmaControllerV1.sol', async () => {
     return [expectedTokens.map(t => t.address), expectedBalances];
   };
 
-  const setupCategory = async (useFullyDilutedMarketCaps = true, minCap = 1, maxCap = toWei(100000000)) => {
+  const setupCategory = async (useFullyDilutedMarketCaps = true, useSqrt = true, minCap = 1, maxCap = toWei(100000000)) => {
     await addLiquidityAll();
-    await controller.createCategory(`0x${'ff'.repeat(32)}`, useFullyDilutedMarketCaps, minCap, maxCap);
-    const index = await controller.categoryIndex();
+    let scoringStrategy;
+    if (useFullyDilutedMarketCaps) {
+      if (useSqrt) scoringStrategy = fdvSqrtScoring;
+      else scoringStrategy = fdvScoring;
+    } else {
+      if (useSqrt) scoringStrategy = cmcSqrtScoring;
+      else scoringStrategy = cmcScoring;
+    }
+    await controller.createTokenList(`0x${'ff'.repeat(32)}`, scoringStrategy.address, minCap, maxCap);
+    const index = await controller.tokenListCount();
     await controller.addTokens(index, tokens);
     await fastForward(3600 * 48);
     await addLiquidityAll();
@@ -140,7 +164,7 @@ describe('SigmaControllerV1.sol', async () => {
       const [capSqrts, sqrtSum] = await getMarketCapSqrts(expectedTokens, useFullyDilutedMarketCaps);
       denorms = capSqrts.map((rt) => fromFP(toFP(rt).div(sqrtSum).mul(WEIGHT_MULTIPLIER)));
     } else {
-      const mcaps = await controller.getMarketCaps(useFullyDilutedMarketCaps, expectedTokens.map(t => t.address));
+      const mcaps = await getMarketCaps(expectedTokens.map(t => t.address), useFullyDilutedMarketCaps);
       const mcapSum = mcaps.reduce((t, m) => t.add(m), BigNumber.from(0));
       denorms = mcaps.map((rt) => fromFP(toFP(rt).div(mcapSum).mul(WEIGHT_MULTIPLIER)));
     }
@@ -205,10 +229,10 @@ describe('SigmaControllerV1.sol', async () => {
     expect(await tokenSeller.getPremiumPercent()).to.eq(defaultPremium);
   }
 
-  const setupPool = async (size = 5, ethValue = 1, useSqrt = true) => {
+  const setupPool = async (size = 5, ethValue = 1) => {
     poolSize = size;
-    if ((await controller.categoryIndex()).eq(0)) await setupCategory();
-    const { events } = await controller.prepareIndexPool(1, size, toWei(ethValue), useSqrt ? 1 : 0, 'Test Index Pool', 'TIP').then(tx => tx.wait());
+    if ((await controller.tokenListCount()).eq(0)) await setupCategory();
+    const { events } = await controller.prepareIndexPool(1, size, toWei(ethValue), 'Test Index Pool', 'TIP').then(tx => tx.wait());
     const { args: { pool: poolAddress, initializer: initializerAddress } } = events.filter(e => e.event == 'NewPoolInitializer')[0];
     pool = await ethers.getContractAt('SigmaIndexPoolV1', poolAddress);
     initializer = await ethers.getContractAt('SigmaPoolInitializerV1', initializerAddress);
@@ -228,7 +252,7 @@ describe('SigmaControllerV1.sol', async () => {
     });
 
     it('circuitBreaker()', async () => {
-      expect(await controller.circuitBreaker()).to.eq(from);
+      expect(await controller.circuitBreaker()).to.eq(await circuitBreaker.getAddress());
     })
   });
 
@@ -250,17 +274,50 @@ describe('SigmaControllerV1.sol', async () => {
     });
   });
 
-  describe('_havePool', async () => {
+  describe('isInitializedPool', async () => {
     setupTests();
 
-    it('All functions with _havePool modifier revert if pool address not recognized', async () => {
+    it('All functions with isInitializedPool modifier revert if pool address not recognized', async () => {
       // reweighPool & reindexPool included even though there is no modifier because it uses the same validation
-      const onlyOwnerFns = ['setSwapFee', 'updateMinimumBalance', 'reweighPool', 'reindexPool'];
+      const onlyOwnerFns = ['setSwapFee', 'updateMinimumBalance', 'reweighPool', 'reindexPool', 'setPublicSwap', 'delegateCompLikeTokenFromPool'];
       for (let fn of onlyOwnerFns) {
         await verifyRejection(ownerFaker, fn, /ERR_POOL_NOT_FOUND/g);
       }
     });
   });
+
+  describe('setCircuitBreaker()', async () => {
+    setupTests();
+
+    it('Reverts if not owner', async () => {
+      await verifyRejection(nonOwnerFaker, 'setDefaultSellerPremium', /Ownable: caller is not the owner/g, zeroAddress);
+    });
+
+    it('Sets circuit breaker address', async () => {
+      const newBreaker = `0x${'11'.repeat(20)}`;
+      await controller.setCircuitBreaker(newBreaker);
+      const breaker = await controller.circuitBreaker();
+      expect(breaker).to.eq(newBreaker);
+    })
+  })
+
+  describe('setPublicSwap()', async () => {
+    setupTests({ init: true, pool: true, size: 5, ethValue: toWei(10) });
+
+    it('Reverts if not owner or circuit breaker', async () => {
+      await verifyRejection(controller.connect(notOwner), 'setPublicSwap', /ERR_NOT_AUTHORIZED/g, pool.address, false);
+    });
+
+    it('Sets public swap to false as circuit breaker', async () => {
+      await controller.connect(circuitBreaker).setPublicSwap(pool.address, false);
+      expect(await pool.isPublicSwap()).to.be.false;
+    })
+
+    it('Sets public swap to true as owner', async () => {
+      await controller.setPublicSwap(pool.address, true);
+      expect(await pool.isPublicSwap()).to.be.true;
+    })
+  })
 
   describe('setDefaultSellerPremium()', async () => {
     setupTests();
@@ -280,23 +337,14 @@ describe('SigmaControllerV1.sol', async () => {
     });
   });
 
-  describe('setCircuitBreaker()', async () => {
-    setupTests();
-
-    it('Sets circuit breaker address', async () => {
-      await controller.setCircuitBreaker(zeroAddress);
-      expect(await controller.circuitBreaker()).to.eq(zeroAddress);
-    })
-  })
-
   describe('getInitialTokensAndBalances()', async () => {
     describe('Sqrt Fully Diluted Market Cap', async () => {
       setupTests({ category: true, useFullyDiluted: true, useSqrt: true });
 
-      it('Returns the top n category tokens and target balances weighted by mcap sqrt', async () => {
+      it('Returns the top n tokens and target balances weighted by mcap sqrt', async () => {
         const ethValue = toWei(1);
         const [expectedTokens, expectedBalances] = await getExpectedTokensAndBalances(5, ethValue, true, true);
-        const [_tokens, balances] = await controller.getInitialTokensAndBalances(1, 1, 5, ethValue);
+        const [_tokens, balances] = await controller.getInitialTokensAndBalances(1, 5, ethValue);
         expect(_tokens).to.deep.eq(expectedTokens);
         for (let i = 0; i < 5; i++) {
           const diff = absDiff(balances[i], expectedBalances[i]);
@@ -306,21 +354,20 @@ describe('SigmaControllerV1.sol', async () => {
 
       it('Reverts if any token has a target balance below the minimum', async () => {
         const ethValue = toWei(1).div(1e12);
-        await verifyRevert('getInitialTokensAndBalances', /ERR_MIN_BALANCE/g, 1, 1, 2, ethValue);
+        await verifyRevert('getInitialTokensAndBalances', /ERR_MIN_BALANCE/g, 1, 2, ethValue);
       });
     })
 
     describe('Proportional Fully Diluted Market Cap', async () => {
-      setupTests();
+      setupTests({ category: true, useFullyDiluted: true, useSqrt: false });
 
-      it('Returns the top n category tokens and target balances weighted by mcap sqrt', async () => {
-        await setupCategory();
+      it('Returns the top n tokens and target balances weighted by mcap sqrt', async () => {
         const ethValue = toWei(1);
         const [expectedTokens, expectedBalances] = await getExpectedTokensAndBalances(5, ethValue, false, true);
-        const [_tokens, balances] = await controller.getInitialTokensAndBalances(1, 0, 5, ethValue);
+        const [_tokens, balances] = await controller.getInitialTokensAndBalances(1, 5, ethValue);
         expect(_tokens).to.deep.eq(expectedTokens);
         for (let i = 0; i < 5; i++) {
-          const diff = absDiff(balances[i], expectedBalances[i]) ;
+          const diff = absDiff(balances[i], expectedBalances[i]);
           expect(diff).to.be.lte(1);
         }
       });
@@ -329,10 +376,10 @@ describe('SigmaControllerV1.sol', async () => {
     describe('Sqrt Circulating Market Cap', async () => {
       setupTests({ category: true, useFullyDiluted: false, useSqrt: true });
 
-      it('Returns the top n category tokens and target balances weighted by mcap sqrt', async () => {
+      it('Returns the top n tokens and target balances weighted by mcap sqrt', async () => {
         const ethValue = toWei(1);
         const [expectedTokens, expectedBalances] = await getExpectedTokensAndBalances(5, ethValue, true, false);
-        const [_tokens, balances] = await controller.getInitialTokensAndBalances(1, 1, 5, ethValue);
+        const [_tokens, balances] = await controller.getInitialTokensAndBalances(1, 5, ethValue);
         expect(_tokens).to.deep.eq(expectedTokens);
         for (let i = 0; i < 5; i++) {
           const diff = absDiff(balances[i], expectedBalances[i]) ;
@@ -344,15 +391,15 @@ describe('SigmaControllerV1.sol', async () => {
     describe('Proportional Circulating Market Cap', async () => {
       setupTests({ category: true, useFullyDiluted: false, useSqrt: false });
 
-      it('Returns the top n category tokens and target balances weighted by mcap sqrt', async () => {
+      it('Returns the top n tokens and target balances weighted by mcap sqrt', async () => {
         await updatePrices(wrappedTokens);
         await fastForward(7200);
         const ethValue = toWei(1);
         const [expectedTokens, expectedBalances] = await getExpectedTokensAndBalances(5, ethValue, false, false);
-        const [_tokens, balances] = await controller.getInitialTokensAndBalances(1, 0, 5, ethValue);
+        const [_tokens, balances] = await controller.getInitialTokensAndBalances(1, 5, ethValue);
         expect(_tokens).to.deep.eq(expectedTokens);
         for (let i = 0; i < 5; i++) {
-          const diff = absDiff(balances[i], expectedBalances[i]) ;
+          const diff = absDiff(balances[i], expectedBalances[i]);
           expect(diff).to.be.lte(1);
         }
       });
@@ -364,27 +411,26 @@ describe('SigmaControllerV1.sol', async () => {
 
     it('Reverts if size > 10', async () => {
       await setupCategory();
-      await verifyRevert('prepareIndexPool', /ERR_MAX_INDEX_SIZE/g, 1, 11, zero, 1, 'a', 'b');
+      await verifyRevert('prepareIndexPool', /ERR_MAX_INDEX_SIZE/g, 1, 11, zero, 'a', 'b');
     });
 
     it('Reverts if size < 2', async () => {
-      await verifyRevert('prepareIndexPool', /ERR_MIN_INDEX_SIZE/g, 1, 1, zero, 1, 'a', 'b');
+      await verifyRevert('prepareIndexPool', /ERR_MIN_INDEX_SIZE/g, 1, 1, zero, 'a', 'b');
     });
 
     it('Reverts if initialWethValue >= 2^144', async () => {
       const ethValue = BigNumber.from(2).pow(144);
-      await verifyRevert('prepareIndexPool', /ERR_MAX_UINT144/g, 1, 4, ethValue, 1, 'a', 'b');
+      await verifyRevert('prepareIndexPool', /ERR_MAX_UINT144/g, 1, 4, ethValue, 'a', 'b');
     });
 
     it('Succeeds with valid inputs', async () => {
       poolSize = 4;
-      const { events } = await controller.prepareIndexPool(1, 4, toWei(10), 1, 'Test Index Pool', 'TIP').then(tx => tx.wait());
-      const { args: { pool: poolAddress, initializer: initializerAddress, categoryID, indexSize, formula } } = events.filter(e => e.event == 'NewPoolInitializer')[0];
+      const { events } = await controller.prepareIndexPool(1, 4, toWei(10), 'Test Index Pool', 'TIP').then(tx => tx.wait());
+      const { args: { pool: poolAddress, initializer: initializerAddress, listID, indexSize } } = events.filter(e => e.event == 'NewPoolInitializer')[0];
       pool = await ethers.getContractAt('SigmaIndexPoolV1', poolAddress);
       initializer = await ethers.getContractAt('SigmaPoolInitializerV1', initializerAddress);
-      expect(categoryID.eq(1)).to.be.true;
+      expect(listID.eq(1)).to.be.true;
       expect(indexSize.eq(4)).to.be.true;
-      expect(formula).to.eq(1);
     });
 
     it('Deploys the pool and initializer to the correct addresses', async () => {
@@ -396,7 +442,7 @@ describe('SigmaControllerV1.sol', async () => {
       await verifyRevert(
         'prepareIndexPool',
         /Create2: Failed on deploy/g,
-        1, 4, toWei(10), 1, 'Test Index Pool', 'TIP'
+        1, 4, toWei(10), 'Test Index Pool', 'TIP'
       );
     });
 
@@ -490,6 +536,10 @@ describe('SigmaControllerV1.sol', async () => {
         const {reweighIndex} = await controller.indexPoolMetadata(pool.address);
         expect(reweighIndex).to.eq(1)
       })
+
+      it('Reverts if reweigh delay has not passed', async () => {
+        await verifyRevert('reweighPool', /ERR_POOL_REWEIGH_DELAY/g, pool.address)
+      })
   
       it('Reverts if reweighIndex % 4 == 0', async () => {
         await prepareReweigh();
@@ -502,7 +552,7 @@ describe('SigmaControllerV1.sol', async () => {
     })
 
     describe('Proportional Fully Diluted Market Cap', async () => {
-      setupTests({ pool: true, init: true, size: 5, ethValue: 1, useFullyDiluted: true, useSqrt: false });
+      setupTests({ category: true, pool: true, init: true, size: 5, ethValue: 1, useFullyDiluted: true, useSqrt: false });
   
       it('Reverts if < 2 weeks have passed', async () => {
         await verifyRevert('reindexPool', /ERR_POOL_REWEIGH_DELAY/g, pool.address);
@@ -630,7 +680,7 @@ describe('SigmaControllerV1.sol', async () => {
       });
 
       it('Sets expected target weights', async () => {
-        const caps = await controller.getMarketCaps(true, tokens);
+        const caps = await getMarketCaps(tokens, true);
         sortedWrappedTokens = [...wrappedTokens.map((t, i) => ({ ...t, marketCap: caps[i] }))]
         .sort((a, b) => {
           if (a.marketCap.lt(b.marketCap)) return 1;
@@ -652,7 +702,7 @@ describe('SigmaControllerV1.sol', async () => {
     })
 
     describe('Proportional Fully Diluted Market Cap', async () => {
-      setupTests({ pool: true, init: true, size: 5, ethValue: 10, useFullyDiluted: true, useSqrt: false });
+      setupTests({ category: true, pool: true, init: true, size: 5, ethValue: 10, useFullyDiluted: true, useSqrt: false });
   
       it('Reindexes the pool with correct minimum balances and desired weights', async () => {
         await prepareReweigh();
@@ -673,7 +723,7 @@ describe('SigmaControllerV1.sol', async () => {
       });
 
       it('Sets expected target weights', async () => {
-        const caps = await controller.getMarketCaps(true, tokens);
+        const caps = await getMarketCaps(tokens, true);
         sortedWrappedTokens = [...wrappedTokens.map((t, i) => ({ ...t, marketCap: caps[i] }))]
         .sort((a, b) => {
           if (a.marketCap.lt(b.marketCap)) return 1;
@@ -780,7 +830,7 @@ describe('SigmaControllerV1.sol', async () => {
     });
 
     it('Sets expected target weights', async () => {
-      const caps = await controller.getMarketCaps(true, tokens);
+      const caps = await getMarketCaps(tokens, true);
       sortedWrappedTokens = [...wrappedTokens.map((t, i) => ({ ...t, marketCap: caps[i] }))]
       .sort((a, b) => {
         if (a.marketCap.lt(b.marketCap)) return 1;
@@ -796,8 +846,9 @@ describe('SigmaControllerV1.sol', async () => {
     })
 
     it('Sets reweighIndex to next multiple of 4', async () => {
-      const { reweighIndex } = await controller.indexPoolMetadata(pool.address);
-      expect(reweighIndex).to.eq(4)
+      expect((await controller.indexPoolMetadata(pool.address)).reweighIndex).to.eq(4)
+      await controller.forceReindexPool(pool.address);
+      expect((await controller.indexPoolMetadata(pool.address)).reweighIndex).to.eq(8)
     })
   })
 
