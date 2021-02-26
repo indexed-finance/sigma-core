@@ -28,38 +28,28 @@ import "./ControllerConstants.sol";
  * controls such as pausing public swaps and managing fee configuration.
  *
  * ===== Pool Configuration =====
- * When an index pool is deployed, it is assigned a token list, a size and a weighting formula.
+ * When an index pool is deployed, it is assigned a token list and a target size.
  *
- * The token list is the set of tokens and configuration used for selecting assets, which is
- * detailed in the documentation for the categories contract.
+ * The token list is the set of tokens and configuration used for selecting and weighting
+ * assets, which is detailed in the documentation for the ScoredTokenLists contract.
+ *
  * The size is the target number of underlying assets held by the pool, it is used to determine
  * which assets the pool will hold.
- * The weighting formula is used to assign weights to tokens in the pool.
  *
- * ===== Weighting Formulae =====
- * There are currently two weighting formulae supported: proportional and sqrt.
- * The weighting formulae are used to compute weights from the market caps of the tokens, which
- * will either be circulating or fully diluted market caps according to the pool's candidate list
- * configuration.
- *
- * Proportional weighting assigns a weight to each token equal to the fraction of its market cap relative
- * to the sum of token market caps.
- *
- * Sqrt weighting assigns a weight to each token equal to the fraction of its market cap relative to the sum
- * of token market cap sqrts.
+ * The list's scoring strategy is used to assign weights.
  *
  * ===== Asset Selection =====
- * When the pool is deployed and when it is re-indexed, the top assets from the pool's category
- * are selected using the index size. They are selected after the category's token list is sorted
- * in descending order by the market caps of tokens, either fully-diluted or circulating.
+ * When the pool is deployed and when it is re-indexed, the top assets from the pool's token list
+ * are selected using the index size. They are selected after sorting the token list in descending
+ * order by the scores of tokens.
  *
  * ===== Rebalancing =====
  * Every week, pools are either re-weighed or re-indexed.
  * They are re-indexed once for every three re-weighs.
  * The contract owner can also force a reindex out of the normal schedule.
  *
- * Re-indexing involves re-selecting the top tokens from the pool's category using the pool's index size,
- * assigning target weights and setting balance targets new tokens.
+ * Re-indexing involves re-selecting the top tokens from the pool's token list using the pool's index
+ * size, assigning target weights and setting balance targets for new tokens.
  *
  * Re-weighing involves assigning target weights to only the tokens already included in the pool.
  *
@@ -283,9 +273,9 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
    * and transfers the underlying tokens from the initialization pool to
    * the actual pool.
    *
-   * The actual weights assigned to tokens is be calculated based on the
+   * The actual weights assigned to tokens is calculated based on the
    * relative values of the acquired balances, rather than the initial
-   * weights computed from the market caps.
+   * weights computed from the token scores.
    */
   function finishPreparedIndexPool(
     address poolAddress,
@@ -407,7 +397,7 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
 
   /**
    * @dev Re-indexes a pool by setting the underlying assets to the top
-   * tokens in its candidates list by market cap.
+   * tokens in its candidates list by score.
    */
   function reindexPool(address poolAddress) external {
     IndexPoolMeta storage meta = indexPoolMetadata[poolAddress];
@@ -459,7 +449,7 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
   }
 
   /**
-   * @dev Reweighs the assets in a pool by market cap and sets the
+   * @dev Reweighs the assets in a pool by their scores and sets the
    * desired new weights, which will be adjusted over time.
    */
   function reweighPool(address poolAddress) external {
