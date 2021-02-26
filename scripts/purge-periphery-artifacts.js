@@ -15,8 +15,7 @@ const keepFiles = [
   ...getSolFiles(controller),
   ...getSolFiles(committee),
   ...getSolFiles(balancer),
-  'WeightingLibrary.sol',
-  'TokenSortLibrary.sol'
+  'ScoreLibrary.sol'
 ].map(f => f.replace('.sol', '.json'));
 
 const artifactsPath = path.join(__dirname, '..', 'artifacts');
