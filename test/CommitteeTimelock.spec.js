@@ -1,4 +1,4 @@
-const { toWei, expect, verifyRejection, fastForward } = require("./utils");
+const { toWei, expect, verifyRejection, fastForward, mineBlock } = require("./utils");
 const { defaultAbiCoder } = require('ethers/lib/utils');
 
 async function deploy(contractName, ...args) {
@@ -58,13 +58,14 @@ describe('CommitteeTimelock.sol', async () => {
 
   describe('queueTransaction()', async () => {
     setupTests();
+    let eta;
 
     it('reverts if not an admin', async () => {
       const { timestamp } = await ethers.provider.getBlock('latest');
       await verifyRejection(
         timelock.connect(notAdmin),
         'queueTransaction',
-        /CommitteeTimelock::isAdmin: Call must come from admin\./g,
+        /CommitteeTimelock::isAdmin: Call must come from admin or superUser\./g,
         token.address,
         0,
         'transfer(address,uint256)',
@@ -81,19 +82,33 @@ describe('CommitteeTimelock.sol', async () => {
         'transfer(address,uint256)',
         defaultAbiCoder.encode(['address', 'uint256'], [notAdmin.address, toWei(1000)]),
         timestamp + DELAY + 100
-      )
+      ).then(tx => tx.wait())
     })
 
     it('can be called by admin', async () => {
       const { timestamp } = await ethers.provider.getBlock('latest');
+      eta = timestamp + DELAY + 101;
       await timelock.queueTransaction(
         token.address,
         0,
         'transfer(address,uint256)',
         defaultAbiCoder.encode(['address', 'uint256'], [notAdmin.address, toWei(1000)]),
-        timestamp + DELAY + 100
+        eta
       )
     })
+
+    it('reverts if transaction with same txHash already queued', async () => {
+      await verifyRejection(
+        timelock,
+        'queueTransaction',
+        /CommitteeTimelock::queueTransaction: Transaction already queued\./g,
+        token.address,
+        0,
+        'transfer(address,uint256)',
+        defaultAbiCoder.encode(['address', 'uint256'], [notAdmin.address, toWei(1000)]),
+        eta
+      );
+    });
   })
 
   describe('executeTransaction()', async () => {
@@ -105,7 +120,7 @@ describe('CommitteeTimelock.sol', async () => {
       await verifyRejection(
         timelock.connect(notAdmin),
         'executeTransaction',
-        /CommitteeTimelock::isAdmin: Call must come from admin\./g,
+        /CommitteeTimelock::isAdmin: Call must come from admin or superUser\./g,
         token.address,
         0,
         'transfer(address,uint256)',

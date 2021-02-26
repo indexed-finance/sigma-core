@@ -18,34 +18,6 @@ import "../interfaces/ICommitteeTimelock.sol";
 contract CommitteeTimelock is ICommitteeTimelock {
   using SafeMath for uint256;
 
-  event NewAdmin(address indexed newAdmin);
-  event NewPendingAdmin(address indexed newPendingAdmin);
-  event NewDelay(uint256 indexed newDelay);
-  event CancelTransaction(
-    bytes32 indexed txHash,
-    address indexed target,
-    uint256 value,
-    string signature,
-    bytes data,
-    uint256 eta
-  );
-  event ExecuteTransaction(
-    bytes32 indexed txHash,
-    address indexed target,
-    uint256 value,
-    string signature,
-    bytes data,
-    uint256 eta
-  );
-  event QueueTransaction(
-    bytes32 indexed txHash,
-    address indexed target,
-    uint256 value,
-    string signature,
-    bytes data,
-    uint256 eta
-  );
-
   uint256 public constant override GRACE_PERIOD = 14 days;
   uint256 public constant override MINIMUM_DELAY = 2 days;
   uint256 public constant override MAXIMUM_DELAY = 30 days;
@@ -59,7 +31,7 @@ contract CommitteeTimelock is ICommitteeTimelock {
   modifier isAdmin {
     require(
       msg.sender == admin || msg.sender == superUser,
-      "CommitteeTimelock::isAdmin: Call must come from admin."
+      "CommitteeTimelock::isAdmin: Call must come from admin or superUser."
     );
     _;
   }
@@ -124,8 +96,11 @@ contract CommitteeTimelock is ICommitteeTimelock {
       eta >= getBlockTimestamp().add(delay),
       "CommitteeTimelock::queueTransaction: Estimated execution block must satisfy delay."
     );
-
     bytes32 txHash = keccak256(abi.encode(target, value, signature, data, eta));
+    require(
+      queuedTransactions[txHash] == false,
+      "CommitteeTimelock::queueTransaction: Transaction already queued."
+    );
     queuedTransactions[txHash] = true;
 
     emit QueueTransaction(txHash, target, value, signature, data, eta);

@@ -7,9 +7,10 @@ const errorDelta = 10 ** -8;
 const ethValue = toWei(10);
 
 describe('SigmaPoolInitializerV1.sol', async () => {
-  let pool, initializer, controller, wrappedTokens, sortedWrappedTokens;
+  let pool, initializer, controller, uniswapOracle;
+  let wrappedTokens, sortedWrappedTokens;
   let verifyRevert, liquidityManager;
-  let updatePrices, uniswapOracle, addLiquidityAll;
+  let updatePrices, fdvSqrtScoring, addLiquidityAll;
   let signer1, signer2, signer3, signer4;
   let addresses;
   let tokens, desiredAmounts;
@@ -69,7 +70,8 @@ describe('SigmaPoolInitializerV1.sol', async () => {
       await deployments.createFixture(async () => {
         ({
           wrappedTokens, controller, updatePrices,
-          addLiquidityAll, uniswapOracle, liquidityManager
+          addLiquidityAll, uniswapOracle, liquidityManager,
+          fdvSqrtScoring
         } = await deployments.createFixture(controllerFixture)());
         wrappedTokens = wrappedTokens.slice(0, 5);
         sortedWrappedTokens = [...wrappedTokens].sort((a, b) => {
@@ -78,11 +80,10 @@ describe('SigmaPoolInitializerV1.sol', async () => {
           return 0;
         });
         tokens = sortedWrappedTokens.map(t => t.address);
-        await controller.createCategory(`0x${'ff'.repeat(32)}`);
+        await controller.createTokenList(`0x${'ff'.repeat(32)}`, fdvSqrtScoring.address, 1, toWei(100000000));
         await controller.addTokens(1, tokens);
         await fastForward(3600 * 48);
         await addLiquidityAll();
-        await controller.orderCategoryTokensByMarketCap(1);
         await updatePrices(wrappedTokens);
         await fastForward(7200);
         await addLiquidityAll();

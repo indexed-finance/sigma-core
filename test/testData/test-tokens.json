@@ -58,5 +58,17 @@
     "symbol": "YFI",
     "price": 45.2714,
     "marketcap": 1367010
+  },
+  {
+    "name": "test token",
+    "symbol": "ttk",
+    "price": 10,
+    "marketcap": 1381065
+  },
+  {
+    "name": "test token 2",
+    "symbol": "ttk2",
+    "price": 5,
+    "marketcap": 1391065
   }
 ]
