@@ -15,9 +15,6 @@ import "../interfaces/IPoolFactory.sol";
 import "../interfaces/IPoolInitializer.sol";
 import "../interfaces/IUnboundTokenSeller.sol";
 
-/* ========== Internal Libraries ========== */
-import "../lib/ScoreLibrary.sol";
-
 /* ========== Internal Inheritance ========== */
 import "./ScoredTokenLists.sol";
 import "./ControllerConstants.sol";
@@ -75,8 +72,6 @@ import "./ControllerConstants.sol";
  * unbound token seller contracts.
  */
 contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
-  using ScoreLibrary for uint256[];
-  using ScoreLibrary for uint256;
   using SafeMath for uint256;
 
 /* ==========  Constants  ========== */

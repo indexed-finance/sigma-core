@@ -3,7 +3,7 @@ pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
 /* ========== Internal Libraries ========== */
-import "../lib/TokenSortLibrary.sol";
+import "../lib/ScoreLibrary.sol";
 
 /* ========== Internal Interfaces ========== */
 import "../interfaces/ICirculatingMarketCapOracle.sol";
@@ -40,6 +40,10 @@ import "../OwnableProxy.sol";
  * by the owner.
  */
 contract ScoredTokenLists is OwnableProxy {
+  using ScoreLibrary for address[];
+  using ScoreLibrary for uint256[];
+  using ScoreLibrary for uint256;
+
 /* ==========  Constants  ========== */
   // Maximum number of tokens in a token list
   uint256 public constant MAX_LIST_TOKENS = 25;
@@ -241,8 +245,7 @@ contract ScoredTokenLists is OwnableProxy {
     TokenList storage list = _lists[listID];
     address[] memory tokens = list.tokens;
     uint256[] memory marketCaps = IScoringStrategy(list.scoringStrategy).getTokenScores(tokens);
-    address[] memory removedTokens = TokenSortLibrary.sortAndFilterReturnRemoved(
-      tokens,
+    address[] memory removedTokens = tokens.sortAndFilterReturnRemoved(
       marketCaps,
       list.minimumScore,
       list.maximumScore
@@ -273,8 +276,7 @@ contract ScoredTokenLists is OwnableProxy {
     TokenList storage list = _lists[listID];
     tokens = list.tokens;
     scores = IScoringStrategy(list.scoringStrategy).getTokenScores(tokens);
-    TokenSortLibrary.sortAndFilter(
-      tokens,
+    tokens.sortAndFilter(
       scores,
       list.minimumScore,
       list.maximumScore
