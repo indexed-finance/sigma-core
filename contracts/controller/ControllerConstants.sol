@@ -9,6 +9,9 @@ contract ControllerConstants {
   // Maximum number of tokens in an index.
   uint256 public constant MAX_INDEX_SIZE = 10;
 
+  // Maximum number of tokens in a token list.
+  uint256 public constant MAX_LIST_TOKENS = 25;
+
   // Minimum balance for a token (only applied at initialization)
   uint256 public constant MIN_BALANCE = 1e6;
 

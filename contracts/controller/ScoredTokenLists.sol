@@ -39,8 +39,6 @@ contract ScoredTokenLists is OwnableProxy {
   using ScoreLibrary for uint256;
 
 /* ==========  Constants  ========== */
-  // Maximum number of tokens in a token list
-  uint256 public constant MAX_LIST_TOKENS = 25;
 
   // Uniswap TWAP oracle
   IIndexedUniswapV2Oracle public immutable uniswapOracle;
