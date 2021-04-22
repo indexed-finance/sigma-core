@@ -71,7 +71,7 @@ describe('ScoreByCMCBarbell6.sol', () => {
       expect(scores[14].eq(25)).to.be.true;
       expect(scores[15].eq(15)).to.be.true;
       expect(scores[16].eq(10)).to.be.true;
-      expect(scores[17].eq(20)).to.be.true;
+      expect(scores[17].eq(10)).to.be.true;
       expect(scores[18].eq(15)).to.be.true;
       expect(scores[19].eq(25)).to.be.true;
     })
