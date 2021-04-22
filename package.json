@@ -44,7 +44,7 @@
     "test:categories": "buidler test ./test/test-categories.spec.js",
     "test:controller": "buidler test ./test/test-controller.spec.js",
     "test": "buidler test",
-    "prepublish": "npm run clean:build && npm run build && node ./scripts/purge-periphery-artifacts.js"
+    "prepublishOnly": "npm run clean:build && npm run build && node ./scripts/purge-periphery-artifacts.js"
   },
   "repository": {
     "type": "git",
