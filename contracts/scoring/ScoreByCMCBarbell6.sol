@@ -29,7 +29,7 @@ contract ScoreByCMCBarbell6 is Ownable, IScoringStrategy {
     scores[positions[0]] = 25;
     scores[positions[1]] = 15;
     scores[positions[2]] = 10;
-    scores[positions[3]] = 20;
+    scores[positions[3]] = 10;
     scores[positions[4]] = 15;
     scores[positions[5]] = 25;
     for (uint256 i = 6; i < len; i++) {
