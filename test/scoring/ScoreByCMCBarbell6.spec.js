@@ -75,5 +75,13 @@ describe('ScoreByCMCBarbell6.sol', () => {
       expect(scores[18].eq(15)).to.be.true;
       expect(scores[19].eq(25)).to.be.true;
     })
+
+    it('Produces barbell scores that sum up to 100', async () => {
+      barbellSum = 0;
+      for (let i = 0; i < 20; i++) {
+        barbellSum += scores[i];
+      }
+      expect(barbellSum.eq(100)).to.be.true;
+    })
   })
 })
