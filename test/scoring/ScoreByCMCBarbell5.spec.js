@@ -73,11 +73,6 @@ describe('ScoreByCMCBarbell5.sol', () => {
       expect(scores[17].eq(10)).to.be.true;
       expect(scores[18].eq(20)).to.be.true;
       expect(scores[19].eq(25)).to.be.true;
-      // expect(scores[15].eq(2.5e19)).to.be.true;
-      // expect(scores[16].eq(2e19)).to.be.true;
-      // expect(scores[17].eq(1e18)).to.be.true;
-      // expect(scores[18].eq(2e19)).to.be.true;
-      // expect(scores[19].eq(2.5e19)).to.be.true;
     })
   })
 })
