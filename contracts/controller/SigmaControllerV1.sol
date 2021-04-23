@@ -74,6 +74,9 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
   // Exit fee recipient for the index pools
   address public immutable defaultExitFeeRecipient;
 
+  // Governance address
+  address public immutable governance;
+
 /* ==========  Events  ========== */
 
   /** @dev Emitted when a pool is initialized and made public. */
@@ -167,7 +170,8 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
     IIndexedUniswapV2Oracle uniswapOracle_,
     IPoolFactory poolFactory_,
     IDelegateCallProxyManager proxyManager_,
-    address defaultExitFeeRecipient_
+    address defaultExitFeeRecipient_,
+    address governance_
   )
     public
     ScoredTokenLists(uniswapOracle_)
@@ -175,6 +179,7 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
     poolFactory = poolFactory_;
     proxyManager = proxyManager_;
     defaultExitFeeRecipient = defaultExitFeeRecipient_;
+    governance = governance_;
   }
 
 /* ==========  Initializer  ========== */
@@ -351,7 +356,8 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
   /**
    * @dev Sets the controller on an index pool.
    */
-  function setController(address poolAddress, address controller) external onlyOwner isInitializedPool(poolAddress) {
+  function setController(address poolAddress, address controller) external isInitializedPool(poolAddress) {
+    require(msg.sender == governance, "ERR_NOT_GOVERNANCE");
     IIndexPool(poolAddress).setController(controller);
   }
 
