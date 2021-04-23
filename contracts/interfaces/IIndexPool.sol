@@ -83,6 +83,8 @@ interface IIndexPool {
 
   function setSwapFee(uint256 swapFee) external;
 
+  function setController(address controller) external;
+
   function delegateCompLikeToken(address token, address delegatee) external;
 
   function setExitFeeRecipient(address) external;

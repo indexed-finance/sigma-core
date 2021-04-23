@@ -230,6 +230,14 @@ contract SigmaIndexPoolV1 is BToken, BMath, IIndexPool {
   }
 
   /**
+   * @dev Set the controller address.
+   */
+  function setController(address controller) external override _control_ {
+    require(controller != address(0), "ERR_NULL_ADDRESS");
+    _controller = controller;
+  }
+
+  /**
    * @dev Delegate a comp-like governance token to an address
    * specified by the controller.
    */
