@@ -153,8 +153,8 @@ contract SigmaIndexPoolV1 is BToken, BMath, IIndexPool {
     require(_controller == address(0), "ERR_CONFIGURED");
     require(controller != address(0), "ERR_NULL_ADDRESS");
     _controller = controller;
-    // default fee is 2.5%
-    _swapFee = BONE / 40;
+    // default fee is 2%
+    _swapFee = BONE / 50;
     _initializeToken(name, symbol);
   }
 
