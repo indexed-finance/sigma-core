@@ -12,7 +12,7 @@ const absDiff = (a, b) => {
 }
 
 describe('SigmaControllerV1.sol', async () => {
-  let controller, from, circuitBreaker, verifyRevert;
+  let controller, from, feeRecipient, circuitBreaker, verifyRevert;
   let nonOwnerFaker, ownerFaker;
   let updatePrices, addLiquidityAll, liquidityManager;
   let sortedWrappedTokens;
@@ -45,7 +45,8 @@ describe('SigmaControllerV1.sol', async () => {
         fdvScoring,
         fdvSqrtScoring,
         cmcScoring,
-        cmcSqrtScoring
+        cmcSqrtScoring,
+        feeRecipient
       } = await deployments.createFixture(controllerFixture)());
       const defaultOptions = {
         init: false,
@@ -253,6 +254,10 @@ describe('SigmaControllerV1.sol', async () => {
 
     it('circuitBreaker()', async () => {
       expect(await controller.circuitBreaker()).to.eq(await circuitBreaker.getAddress());
+    })
+
+    it('defaultExitFeeRecipient()', async () => {
+      expect(await controller.defaultExitFeeRecipient()).to.eq(feeRecipient);
     })
   });
 
