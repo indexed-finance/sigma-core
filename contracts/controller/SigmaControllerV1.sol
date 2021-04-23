@@ -71,9 +71,6 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
   // Proxy manager & factory
   IDelegateCallProxyManager public immutable proxyManager;
 
-  // Exit fee recipient for the index pools
-  address public immutable defaultExitFeeRecipient;
-
   // Governance address
   address public immutable governance;
 
@@ -148,6 +145,9 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
   // Address able to halt swaps
   address public circuitBreaker;
 
+  // Exit fee recipient for the index pools
+  address public defaultExitFeeRecipient;
+
 /* ========== Modifiers ========== */
 
   modifier isInitializedPool(address poolAddress) {
@@ -176,7 +176,6 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
     IIndexedUniswapV2Oracle uniswapOracle_,
     IPoolFactory poolFactory_,
     IDelegateCallProxyManager proxyManager_,
-    address defaultExitFeeRecipient_,
     address governance_
   )
     public
@@ -184,7 +183,6 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
   {
     poolFactory = poolFactory_;
     proxyManager = proxyManager_;
-    defaultExitFeeRecipient = defaultExitFeeRecipient_;
     governance = governance_;
   }
 
@@ -215,6 +213,14 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
    */
   function setCircuitBreaker(address circuitBreaker_) external onlyOwner {
     circuitBreaker = circuitBreaker_;
+  }
+
+  /**
+   * @dev Sets the default exit fee recipient for new pools.
+   */
+  function setDefaultExitFeeRecipient(address defaultExitFeeRecipient_) external {
+    require(msg.sender == governance, "ERR_NOT_GOVERNANCE");
+    defaultExitFeeRecipient = defaultExitFeeRecipient_;
   }
 
 /* ==========  Pool Deployment  ========== */
