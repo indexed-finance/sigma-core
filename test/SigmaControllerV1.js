@@ -12,7 +12,7 @@ const absDiff = (a, b) => {
 }
 
 describe('SigmaControllerV1.sol', async () => {
-  let controller, from, feeRecipient, circuitBreaker, verifyRevert;
+  let controller, from, feeRecipient, governance, circuitBreaker, verifyRevert;
   let nonOwnerFaker, ownerFaker;
   let updatePrices, addLiquidityAll, liquidityManager;
   let sortedWrappedTokens;
@@ -33,6 +33,7 @@ describe('SigmaControllerV1.sol', async () => {
         circulatingCapOracle,
         wrappedTokens,
         controller,
+        governance,
         from,
         verifyRevert,
         nonOwnerFaker,
@@ -259,6 +260,10 @@ describe('SigmaControllerV1.sol', async () => {
     it('defaultExitFeeRecipient()', async () => {
       expect(await controller.defaultExitFeeRecipient()).to.eq(feeRecipient);
     })
+
+    it('governance()', async () => {
+      expect(await controller.governance()).to.eq(governance);
+    })
   });
 
   describe('onlyOwner', async () => {
@@ -271,8 +276,7 @@ describe('SigmaControllerV1.sol', async () => {
         'updateSellerPremium',
         'setSwapFee',
         'delegateCompLikeTokenFromPool',
-        'setCircuitBreaker',
-        'setController'
+        'setCircuitBreaker'
       ];
       for (let fn of onlyOwnerFns) {
         await verifyRejection(nonOwnerFaker, fn, /Ownable: caller is not the owner/g);
@@ -523,8 +527,13 @@ describe('SigmaControllerV1.sol', async () => {
   describe('setController()', async () => {
     setupTests({ pool: true, init: true, size: 2, ethValue: 1 });
 
+    it('Reverts if not called by governance', async () => {
+      await verifyRejection(controller, 'setController', /ERR_NOT_GOVERNANCE/g, pool.address, `0x${'11'.repeat(20)}`);
+    })
+
     it('Sets controller on the pool', async () => {
-      await controller.setController(pool.address, `0x${'11'.repeat(20)}`);
+      const [,, governance] = await ethers.getSigners()
+      await controller.connect(governance).setController(pool.address, `0x${'11'.repeat(20)}`);
       expect(await pool.getController()).to.eq(`0x${'11'.repeat(20)}`);
     })
   })
