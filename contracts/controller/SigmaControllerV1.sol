@@ -95,6 +95,12 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
     uint256 indexSize
   );
 
+  /** @dev Emitted when a pool is reweighed. */
+  event PoolReweighed(address pool);
+
+  /** @dev Emitted when a pool is reindexed. */
+  event PoolReindexed(address pool);
+
 /* ==========  Structs  ========== */
 
   /**
@@ -459,6 +465,7 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
       denormalizedWeights,
       minimumBalances
     );
+    emit PoolReindexed(poolAddress);
   }
 
   /**
@@ -488,6 +495,7 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
     meta.lastReweigh = uint64(now);
     indexPoolMetadata[poolAddress] = meta;
     IIndexPool(poolAddress).reweighTokens(tokens, denormalizedWeights);
+    emit PoolReweighed(poolAddress);
   }
 
 /* ==========  Pool Queries  ========== */
