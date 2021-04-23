@@ -266,7 +266,8 @@ describe('SigmaControllerV1.sol', async () => {
         'updateSellerPremium',
         'setSwapFee',
         'delegateCompLikeTokenFromPool',
-        'setCircuitBreaker'
+        'setCircuitBreaker',
+        'setController'
       ];
       for (let fn of onlyOwnerFns) {
         await verifyRejection(nonOwnerFaker, fn, /Ownable: caller is not the owner/g);
@@ -279,7 +280,7 @@ describe('SigmaControllerV1.sol', async () => {
 
     it('All functions with isInitializedPool modifier revert if pool address not recognized', async () => {
       // reweighPool & reindexPool included even though there is no modifier because it uses the same validation
-      const onlyOwnerFns = ['setSwapFee', 'updateMinimumBalance', 'reweighPool', 'reindexPool', 'setPublicSwap', 'delegateCompLikeTokenFromPool'];
+      const onlyOwnerFns = ['setSwapFee', 'updateMinimumBalance', 'reweighPool', 'reindexPool', 'setPublicSwap', 'delegateCompLikeTokenFromPool', 'setController'];
       for (let fn of onlyOwnerFns) {
         await verifyRejection(ownerFaker, fn, /ERR_POOL_NOT_FOUND/g);
       }
@@ -513,6 +514,15 @@ describe('SigmaControllerV1.sol', async () => {
       expect(newFee.eq(fee)).to.be.true;
     });
   });
+
+  describe('setController()', async () => {
+    setupTests({ pool: true, init: true, size: 2, ethValue: 1 });
+
+    it('Sets controller on the pool', async () => {
+      await controller.setController(pool.address, `0x${'11'.repeat(20)}`);
+      expect(await pool.getController()).to.eq(`0x${'11'.repeat(20)}`);
+    })
+  })
 
   describe('reweighPool()', async () => {
     describe('Sqrt Fully Diluted Market Cap', async () => {
