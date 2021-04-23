@@ -110,6 +110,7 @@ const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
     poolFactory,
     controller,
     from: deployer,
+    feeRecipient,
     verifyRevert,
     nonOwnerFaker,
     addLiquidityAll,
