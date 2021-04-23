@@ -220,6 +220,7 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
    */
   function setDefaultExitFeeRecipient(address defaultExitFeeRecipient_) external {
     require(msg.sender == governance, "ERR_NOT_GOVERNANCE");
+    require(defaultExitFeeRecipient_ != address(0), "ERR_NULL_ADDRESS");
     defaultExitFeeRecipient = defaultExitFeeRecipient_;
   }
 
