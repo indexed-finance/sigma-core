@@ -351,6 +351,7 @@ contract ScoredTokenLists is OwnableProxy {
   function getTokenScores(uint256 listID, address[] memory tokens)
     public
     view
+    validTokenList(listID)
     returns (uint256[] memory scores)
   {
     scores = IScoringStrategy(_lists[listID].scoringStrategy).getTokenScores(tokens);
