@@ -10,7 +10,7 @@ async function deploy(contractName, ...args) {
   return Factory.deploy(...args);
 }
 
-describe('MarketCapSortedTokenCategories.sol', () => {
+describe('SortedTokenLists.sol', () => {
   let tokens, wrappedTokens, oracle;
   let addLiquidityAll, addLiquidity, deployTokenAndMarket;
   let circulatingCapOracle, liquidityManager;
