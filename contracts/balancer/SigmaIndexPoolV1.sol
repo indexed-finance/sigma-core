@@ -897,6 +897,10 @@ contract SigmaIndexPoolV1 is BToken, BMath, IIndexPool {
     return _swapFee;
   }
 
+  function getExitFee() external view override _viewlock_ returns (uint256/* exitFee */) {
+    return EXIT_FEE;
+  }
+
   /**
    * @dev Returns the controller address.
    */

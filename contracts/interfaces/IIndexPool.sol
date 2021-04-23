@@ -155,6 +155,8 @@ interface IIndexPool {
 
   function getSwapFee() external view returns (uint256/* swapFee */);
 
+  function getExitFee() external view returns (uint256/* exitFee */);
+
   function getController() external view returns (address);
 
   function getExitFeeRecipient() external view returns (address);
