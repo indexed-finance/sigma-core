@@ -20,7 +20,7 @@ const toLiquidityAmounts = ({ price, marketcap }, init = false) => {
 }
 
 const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
-  const { deployer, feeRecipient } = await getNamedAccounts();
+  const { deployer, feeRecipient, governance } = await getNamedAccounts();
   const [ signer, signer1, signer2 ] = await ethers.getSigners();
   const uniswapResult = await deployments.createFixture(uniswapFixture)();
   const { uniswapRouter, uniswapOracle, deployTokenAndMarket, addLiquidity, updatePrices } = uniswapResult;
@@ -41,7 +41,7 @@ const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
   const cmcSqrtScoring = await deploy('ScoreBySqrtCMC', circulatingCapOracle.address);
 
   // Deploy pool controller
-  const controllerImplementation = await deploy('SigmaControllerV1', uniswapOracle.address, poolFactory.address, proxyManager.address, feeRecipient);
+  const controllerImplementation = await deploy('SigmaControllerV1', uniswapOracle.address, poolFactory.address, proxyManager.address, governance);
   const controllerAddress = await proxyManager.computeProxyAddressOneToOne(deployer, controllerImplementationSalt);
   await proxyManager.deployProxyOneToOne(controllerImplementationSalt, controllerImplementation.address);
   const controller = await ethers.getContractAt('SigmaControllerV1', controllerAddress);
@@ -111,6 +111,7 @@ const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
     controller,
     from: deployer,
     feeRecipient,
+    governance,
     verifyRevert,
     nonOwnerFaker,
     addLiquidityAll,
