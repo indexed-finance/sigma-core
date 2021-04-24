@@ -100,6 +100,9 @@ module.exports = {
     },
     feeRecipient: {
       default: 1
+    },
+    governance: {
+      default: 2
     }
   },
   networks: {
