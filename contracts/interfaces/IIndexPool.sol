@@ -71,8 +71,8 @@ interface IIndexPool {
   /** @dev Emitted when a token reaches its minimum balance. */
   event LOG_TOKEN_READY(address indexed token);
 
-  /** @dev Emitted when public trades are enabled. */
-  event LOG_PUBLIC_SWAP_ENABLED();
+  /** @dev Emitted when public trades are enabled or disabled. */
+  event LOG_PUBLIC_SWAP_TOGGLED(bool isPublic);
 
   /** @dev Emitted when the swap fee is updated. */
   event LOG_SWAP_FEE_UPDATED(uint256 swapFee);
