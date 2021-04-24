@@ -373,7 +373,7 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
   /**
    * @dev Sets the controller on an index pool.
    */
-  function setController(address poolAddress, address controller) external onlyGovernance isInitializedPool(poolAddress) {
+  function setController(address poolAddress, address controller) external isInitializedPool(poolAddress) onlyGovernance {
     IIndexPool(poolAddress).setController(controller);
   }
 
