@@ -89,14 +89,13 @@ describe('SigmaIndexPoolV1.sol', async () => {
   describe('setExitFeeRecipient', async () => {
     setupTests();
 
-    it('Reverts if not called by current fee recipient', async () => {
-      await verifyRejection(indexPool, 'setExitFeeRecipient', /ERR_NOT_FEE_RECIPIENT/g, zeroAddress)
+    it('Reverts if address is null', async () => {
+      await verifyRejection(indexPool, 'setExitFeeRecipient', /ERR_NULL_ADDRESS/g, zeroAddress)
     })
 
     it('Updates the fee recipient', async () => {
-      const [, feeRecipientSigner] = await ethers.getSigners()
-      await indexPool.connect(feeRecipientSigner).setExitFeeRecipient(zeroAddress);
-      expect(await indexPool.getExitFeeRecipient()).to.eq(zeroAddress)
+      await indexPool.setExitFeeRecipient(`0x${'11'.repeat(20)}`);
+      expect(await indexPool.getExitFeeRecipient()).to.eq(`0x${'11'.repeat(20)}`)
     })
   })
 
@@ -108,7 +107,8 @@ describe('SigmaIndexPoolV1.sol', async () => {
         'reweighTokens',
         'reindexTokens',
         'setMinimumBalance',
-        'setPublicSwap'
+        'setPublicSwap',
+        'setExitFeeRecipient'
       ];
       for (let fn of controllerOnlyFunctions) {
         await verifyRejection(nonOwnerFaker, fn, /ERR_NOT_CONTROLLER/g);
