@@ -235,6 +235,7 @@ contract SigmaIndexPoolV1 is BToken, BMath, IIndexPool {
   function setController(address controller) external override _control_ {
     require(controller != address(0), "ERR_NULL_ADDRESS");
     _controller = controller;
+    emit LOG_CONTROLLER_UPDATED(controller);
   }
 
   /**
@@ -255,6 +256,7 @@ contract SigmaIndexPoolV1 is BToken, BMath, IIndexPool {
   function setExitFeeRecipient(address exitFeeRecipient) external override _control_ {
     require(exitFeeRecipient != address(0), "ERR_NULL_ADDRESS");
     _exitFeeRecipient = exitFeeRecipient;
+    emit LOG_EXIT_FEE_RECIPIENT_UPDATED(exitFeeRecipient);
   }
 
   /**
