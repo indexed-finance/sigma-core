@@ -22,60 +22,6 @@ Subject to the GPL-3.0 license
 
 
 contract SigmaIndexPoolV1 is BToken, BMath, IIndexPool {
-
-/* ==========  EVENTS  ========== */
-
-  /** @dev Emitted when tokens are swapped. */
-  event LOG_SWAP(
-    address indexed caller,
-    address indexed tokenIn,
-    address indexed tokenOut,
-    uint256 tokenAmountIn,
-    uint256 tokenAmountOut
-  );
-
-  /** @dev Emitted when underlying tokens are deposited for pool tokens. */
-  event LOG_JOIN(
-    address indexed caller,
-    address indexed tokenIn,
-    uint256 tokenAmountIn
-  );
-
-  /** @dev Emitted when pool tokens are burned for underlying. */
-  event LOG_EXIT(
-    address indexed caller,
-    address indexed tokenOut,
-    uint256 tokenAmountOut
-  );
-
-  /** @dev Emitted when a token's weight updates. */
-  event LOG_DENORM_UPDATED(address indexed token, uint256 newDenorm);
-
-  /** @dev Emitted when a token's desired weight is set. */
-  event LOG_DESIRED_DENORM_SET(address indexed token, uint256 desiredDenorm);
-
-  /** @dev Emitted when a token is unbound from the pool. */
-  event LOG_TOKEN_REMOVED(address token);
-
-  /** @dev Emitted when a token is unbound from the pool. */
-  event LOG_TOKEN_ADDED(
-    address indexed token,
-    uint256 desiredDenorm,
-    uint256 minimumBalance
-  );
-
-  /** @dev Emitted when a token's minimum balance is updated. */
-  event LOG_MINIMUM_BALANCE_UPDATED(address token, uint256 minimumBalance);
-
-  /** @dev Emitted when a token reaches its minimum balance. */
-  event LOG_TOKEN_READY(address indexed token);
-
-  /** @dev Emitted when public trades are disabled. */
-  event LOG_PUBLIC_SWAP_TOGGLED(bool enabled);
-
-  /** @dev Emitted when the swap fee is updated. */
-  event LOG_SWAP_FEE_UPDATED(uint256 swapFee);
-
 /* ==========  Modifiers  ========== */
 
   modifier _lock_ {
