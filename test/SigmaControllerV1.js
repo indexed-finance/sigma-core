@@ -26,6 +26,7 @@ describe('SigmaControllerV1.sol', async () => {
   const setupTests = (options = {}) => {
 
     before(async () => {
+      ([,, governance] = await ethers.getSigners());
       ({
         circuitBreaker,
         poolFactory,
@@ -33,7 +34,6 @@ describe('SigmaControllerV1.sol', async () => {
         circulatingCapOracle,
         wrappedTokens,
         controller,
-        governance,
         from,
         verifyRevert,
         nonOwnerFaker,
@@ -56,9 +56,10 @@ describe('SigmaControllerV1.sol', async () => {
         size: undefined,
         useFullyDiluted: true,
         useSqrt: true,
-        ethValue: undefined
+        ethValue: undefined,
+        setRecipient: true
       };
-      const { init, pool, category, size, ethValue, useFullyDiluted, useSqrt } = Object.assign(defaultOptions, options);
+      const { init, pool, category, size, ethValue, useFullyDiluted, useSqrt, setRecipient } = Object.assign(defaultOptions, options);
       tokens = wrappedTokens.map(t => t.address);
       if (!useFullyDiluted) {
         sortedWrappedTokens = [
@@ -82,6 +83,9 @@ describe('SigmaControllerV1.sol', async () => {
           if (a.marketcap > b.marketcap) return -1;
           return 0;
         });
+      }
+      if (setRecipient) {
+        await controller.connect(governance).setDefaultExitFeeRecipient(feeRecipient);
       }
       if (category) await setupCategory(useFullyDiluted, useSqrt);
       if (pool) await setupPool(size, ethValue, useSqrt);
@@ -242,7 +246,7 @@ describe('SigmaControllerV1.sol', async () => {
   }
 
   describe('Initializer & Settings', async () => {
-    setupTests();
+    setupTests({ setRecipient: false });
 
     it('defaultSellerPremium(): set to 2', async () => {
       const premium = await controller.defaultSellerPremium();
@@ -258,11 +262,11 @@ describe('SigmaControllerV1.sol', async () => {
     })
 
     it('defaultExitFeeRecipient()', async () => {
-      expect(await controller.defaultExitFeeRecipient()).to.eq(feeRecipient);
+      expect(await controller.defaultExitFeeRecipient()).to.eq(`0x${'00'.repeat(20)}`);
     })
 
     it('governance()', async () => {
-      expect(await controller.governance()).to.eq(governance);
+      expect(await controller.governance()).to.eq(await governance.getAddress());
     })
   });
 
@@ -289,7 +293,12 @@ describe('SigmaControllerV1.sol', async () => {
 
     it('All functions with isInitializedPool modifier revert if pool address not recognized', async () => {
       // reweighPool & reindexPool included even though there is no modifier because it uses the same validation
-      const onlyOwnerFns = ['setSwapFee', 'updateMinimumBalance', 'reweighPool', 'reindexPool', 'setPublicSwap', 'delegateCompLikeTokenFromPool', 'setController'];
+      const onlyOwnerFns = [
+        'setSwapFee', 'updateMinimumBalance',
+        'reweighPool', 'reindexPool',
+        'setPublicSwap', 'delegateCompLikeTokenFromPool',
+        'setController', 'setExitFeeRecipient'
+    ];
       for (let fn of onlyOwnerFns) {
         await verifyRejection(ownerFaker, fn, /ERR_POOL_NOT_FOUND/g);
       }
@@ -308,6 +317,37 @@ describe('SigmaControllerV1.sol', async () => {
       await controller.setCircuitBreaker(newBreaker);
       const breaker = await controller.circuitBreaker();
       expect(breaker).to.eq(newBreaker);
+    })
+  })
+
+  describe('setDefaultExitFeeRecipient()', () => {
+    setupTests({ setRecipient: false });
+
+    it('Reverts if not called by governance', async () => {
+      await verifyRejection(controller, 'setDefaultExitFeeRecipient', /ERR_NOT_GOVERNANCE/g, zeroAddress);
+    })
+
+    it('Reverts if address is zero', async () => {
+      await verifyRejection(controller.connect(governance), 'setDefaultExitFeeRecipient', /ERR_NULL_ADDRESS/g, zeroAddress);
+    })
+
+    it('Sets default exit fee recipient', async () => {
+      await controller.connect(governance).setDefaultExitFeeRecipient(feeRecipient);
+      expect(await controller.defaultExitFeeRecipient()).to.eq(feeRecipient)
+    })
+  })
+
+  describe('setExitFeeRecipient()', () => {
+    setupTests({ setRecipient: true, init: true, pool: true, size: 5, ethValue: toWei(10) });
+
+    it('Reverts if not called by governance', async () => {
+      await verifyRejection(controller, 'setExitFeeRecipient', /ERR_NOT_GOVERNANCE/g, pool.address, feeRecipient);
+    })
+
+    it('Sets exit fee recipient', async () => {
+      const recipient = `0x${'11'.repeat(20)}`;
+      await controller.connect(governance).setExitFeeRecipient(pool.address, recipient);
+      expect(await pool.getExitFeeRecipient()).to.eq(recipient)
     })
   })
 
@@ -532,7 +572,6 @@ describe('SigmaControllerV1.sol', async () => {
     })
 
     it('Sets controller on the pool', async () => {
-      const [,, governance] = await ethers.getSigners()
       await controller.connect(governance).setController(pool.address, `0x${'11'.repeat(20)}`);
       expect(await pool.getController()).to.eq(`0x${'11'.repeat(20)}`);
     })
