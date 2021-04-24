@@ -166,6 +166,11 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
     _;
   }
 
+  modifier onlyGovernance() {
+    require(msg.sender == governance, "ERR_NOT_GOVERNANCE");
+    _;
+  }
+
 /* ==========  Constructor  ========== */
 
   /**
@@ -218,8 +223,7 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
   /**
    * @dev Sets the default exit fee recipient for new pools.
    */
-  function setDefaultExitFeeRecipient(address defaultExitFeeRecipient_) external {
-    require(msg.sender == governance, "ERR_NOT_GOVERNANCE");
+  function setDefaultExitFeeRecipient(address defaultExitFeeRecipient_) external onlyGovernance {
     require(defaultExitFeeRecipient_ != address(0), "ERR_NULL_ADDRESS");
     defaultExitFeeRecipient = defaultExitFeeRecipient_;
   }
@@ -369,8 +373,7 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
   /**
    * @dev Sets the controller on an index pool.
    */
-  function setController(address poolAddress, address controller) external isInitializedPool(poolAddress) {
-    require(msg.sender == governance, "ERR_NOT_GOVERNANCE");
+  function setController(address poolAddress, address controller) external onlyGovernance isInitializedPool(poolAddress) {
     IIndexPool(poolAddress).setController(controller);
   }
 
