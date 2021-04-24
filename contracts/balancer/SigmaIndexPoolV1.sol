@@ -250,11 +250,10 @@ contract SigmaIndexPoolV1 is BToken, BMath, IIndexPool {
   }
 
   /**
-   * @dev Set the exit fee recipient address. Can only be called
-   * by the current exit fee recipient.
+   * @dev Set the exit fee recipient address.
    */
-  function setExitFeeRecipient(address exitFeeRecipient) external override {
-    require(msg.sender == _exitFeeRecipient, "ERR_NOT_FEE_RECIPIENT");
+  function setExitFeeRecipient(address exitFeeRecipient) external override _control_ {
+    require(exitFeeRecipient != address(0), "ERR_NULL_ADDRESS");
     _exitFeeRecipient = exitFeeRecipient;
   }
 

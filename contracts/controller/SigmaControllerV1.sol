@@ -378,6 +378,13 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
   }
 
   /**
+   * @dev Sets the exit fee recipient for an existing pool.
+   */
+  function setExitFeeRecipient(address poolAddress, address exitFeeRecipient) external isInitializedPool(poolAddress) onlyGovernance {
+    IIndexPool(poolAddress).setExitFeeRecipient(exitFeeRecipient);
+  }
+
+  /**
    * @dev Updates the minimum balance of an uninitialized token, which is
    * useful when the token's price on the pool is too low relative to
    * external prices for people to trade it in.
