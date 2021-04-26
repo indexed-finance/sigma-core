@@ -21,7 +21,7 @@ const toLiquidityAmounts = ({ price, marketcap }, init = false) => {
 
 const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
   const { deployer, feeRecipient, governance } = await getNamedAccounts();
-  const [ signer, signer1, signer2 ] = await ethers.getSigners();
+  const [ signer, signer1, signer2, signer3 ] = await ethers.getSigners();
   const uniswapResult = await deployments.createFixture(uniswapFixture)();
   const { uniswapRouter, uniswapOracle, deployTokenAndMarket, addLiquidity, updatePrices } = uniswapResult;
 
@@ -98,7 +98,7 @@ const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
   }
 
   const verifyRevert = (...args) => verifyRejection(controller, ...args);
-  const nonOwnerFaker = getFakerContract(controller, signer2);
+  const nonOwnerFaker = getFakerContract(controller, signer3);
   const ownerFaker = getFakerContract(controller);
 
   return {
@@ -112,6 +112,7 @@ const controllerFixture = async ({ deployments, getNamedAccounts, ethers }) => {
     from: deployer,
     feeRecipient,
     governance,
+    notOwner: signer3,
     verifyRevert,
     nonOwnerFaker,
     addLiquidityAll,
