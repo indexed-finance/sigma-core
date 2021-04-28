@@ -12,7 +12,7 @@ import "../interfaces/IScoringStrategy.sol";
 import "../interfaces/ICirculatingMarketCapOracle.sol";
 
 
-contract ScoreByCMCPegged is Ownable, IScoringStrategy {
+contract ScoreByCMCPegged20 is Ownable, IScoringStrategy {
   using SafeMath for uint256;
 
   // Chainlink or other circulating market cap oracle
@@ -28,14 +28,14 @@ contract ScoreByCMCPegged is Ownable, IScoringStrategy {
     override
     returns (uint256[] memory scores)
   {
-    require(tokens.length >= 4, "Not enough tokens");
+    require(tokens.length >= 5, "Not enough tokens");
     uint256[] memory marketCaps = ICirculatingMarketCapOracle(circulatingMarketCapOracle).getCirculatingMarketCaps(tokens);
     uint256[] memory positions = sortAndReturnPositions(marketCaps);
-    uint256 memory subscore = calculateIndexSum(marketCaps, positions);
+    uint256 subscore = calculateIndexSum(marketCaps, positions);
     uint256 len = positions.length;
     scores = new uint256[](len);
     scores[positions[0]] = peggedScore(subscore);
-    scores[positions[1]] = peggedScore(subScore);
+    scores[positions[1]] = peggedScore(subscore);
     for (uint i = 2; i < 5; i++) {
       scores[positions[i]] = downscaledScore(marketCaps[positions[i]]);
     }
@@ -82,8 +82,7 @@ contract ScoreByCMCPegged is Ownable, IScoringStrategy {
    * If WETH and WBTC are included, they're always going to be the top two, and we only want three others.
    * Require statement unnecessary: already included in caller function getTokenScores
    **/
-  function calculateIndexSum(uint256[] memory marketCaps, uint256 memory positions) internal pure returns(uint256 subtotal) {
-    uint256 subtotal = 0;
+  function calculateIndexSum(uint256[] memory marketCaps, uint256[] memory positions) internal pure returns(uint256 subtotal) {
     for (uint256 i = 2; i < 5; i++) {
       subtotal += marketCaps[positions[i]];
     }
