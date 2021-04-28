@@ -61,7 +61,7 @@ describe('ScoreByCMCPegged20.sol', () => {
         const token = `0x${(i + 1).toString(16).padStart(40, '0')}`;
         tokens.push(token);
         if (i < 2) {
-          caps.push(toWei(10000));
+          caps.push(toWei((100 / (i + 1)) * 100));
         } else {
           caps.push(toWei(i * 10));
         }
