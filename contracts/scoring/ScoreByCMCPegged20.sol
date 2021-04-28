@@ -37,7 +37,7 @@ contract ScoreByCMCPegged20 is Ownable, IScoringStrategy {
     scores[positions[0]] = peggedScore(subscore);
     scores[positions[1]] = peggedScore(subscore);
     for (uint i = 2; i < 5; i++) {
-      scores[positions[i]] = downscaledScore(marketCaps[positions[i]]);
+      scores[positions[i]] = downscaledScore(marketCaps[i]);
     }
     for (uint256 j = 5; j < len; j++) {
       scores[positions[j]] = 0;
@@ -93,7 +93,7 @@ contract ScoreByCMCPegged20 is Ownable, IScoringStrategy {
    * elements that we want to include), returns a value corresponding to 20% of said sum for pegged weights.
    **/
   function peggedScore(uint256 subscore) internal pure returns(uint256) {
-    return (subscore.mul(20)).div(100);
+    return (subscore.mul(20)).div(100e18);
   }
   
   /**
@@ -101,7 +101,7 @@ contract ScoreByCMCPegged20 is Ownable, IScoringStrategy {
    * scale the value down by 60% (the remnant after pegging WETH and WBTC to 20% each).
    **/
   function downscaledScore(uint256 oldScore) internal pure returns(uint256) {
-    return (oldScore.mul(60)).div(100);
+    return (oldScore.mul(60)).div(100e18);
   }
 
 }
