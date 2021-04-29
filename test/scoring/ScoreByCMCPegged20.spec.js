@@ -54,16 +54,18 @@ describe('ScoreByCMCPegged20.sol', () => {
       );
     })
 
-    it('Returns scaled scores with pegged values for highest two CMCs as scores', async () => {
+    it('Returns scaled scores with pegged values for highest two CMCs', async () => {
       const tokens = [];
       const caps = [];
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 7; i++) {
         const token = `0x${(i + 1).toString(16).padStart(40, '0')}`;
         tokens.push(token);
         if (i < 2) {
           caps.push(toWei((100 / (i + 1)) * 100));
-        } else {
+        } else if (i < 5) {
           caps.push(toWei(i * 10));
+        } else { 
+          caps.push(toWei(i)); 
         }
       }
       await circulatingMarketCapOracle.setCirculatingMarketCaps(tokens, caps);
@@ -73,6 +75,9 @@ describe('ScoreByCMCPegged20.sol', () => {
       expect(scores[2].eq(12)).to.be.true;
       expect(scores[3].eq(18)).to.be.true;
       expect(scores[4].eq(24)).to.be.true;
+      for (let j = 5; j < 7; j++) {
+        expect(scores[j].eq(0)).to.be.true;
+      }
     })
   })
 })
