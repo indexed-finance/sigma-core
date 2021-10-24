@@ -190,8 +190,6 @@ interface IIndexPool {
 
   function getTokenRecord(address token) external view returns (Record memory record);
 
-  function extrapolatePoolValueFromToken() external view returns (address/* token */, uint256/* extrapolatedValue */);
-
   function getTotalDenormalizedWeight() external view returns (uint256);
 
   function getBalance(address token) external view returns (uint256);
