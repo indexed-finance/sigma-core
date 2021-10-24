@@ -12,7 +12,7 @@ const absDiff = (a, b) => {
 }
 
 describe('SigmaControllerV1.sol', async () => {
-  let controller, from, circuitBreaker, verifyRevert;
+  let controller, from, feeRecipient, governance, circuitBreaker, verifyRevert;
   let nonOwnerFaker, ownerFaker;
   let updatePrices, addLiquidityAll, liquidityManager;
   let sortedWrappedTokens;
@@ -26,6 +26,7 @@ describe('SigmaControllerV1.sol', async () => {
   const setupTests = (options = {}) => {
 
     before(async () => {
+      ([,, governance] = await ethers.getSigners());
       ({
         circuitBreaker,
         poolFactory,
@@ -45,7 +46,9 @@ describe('SigmaControllerV1.sol', async () => {
         fdvScoring,
         fdvSqrtScoring,
         cmcScoring,
-        cmcSqrtScoring
+        cmcSqrtScoring,
+        feeRecipient,
+        notOwner
       } = await deployments.createFixture(controllerFixture)());
       const defaultOptions = {
         init: false,
@@ -54,9 +57,10 @@ describe('SigmaControllerV1.sol', async () => {
         size: undefined,
         useFullyDiluted: true,
         useSqrt: true,
-        ethValue: undefined
+        ethValue: undefined,
+        setRecipient: true
       };
-      const { init, pool, category, size, ethValue, useFullyDiluted, useSqrt } = Object.assign(defaultOptions, options);
+      const { init, pool, category, size, ethValue, useFullyDiluted, useSqrt, setRecipient } = Object.assign(defaultOptions, options);
       tokens = wrappedTokens.map(t => t.address);
       if (!useFullyDiluted) {
         sortedWrappedTokens = [
@@ -65,6 +69,7 @@ describe('SigmaControllerV1.sol', async () => {
             marketCap: BigNumber.from(t.address.slice(0, 10)).div(2)
           }))
         ];
+
         await circulatingCapOracle.setCirculatingMarketCaps(
           sortedWrappedTokens.map(t => t.address),
           sortedWrappedTokens.map(t => t.marketCap)
@@ -81,10 +86,12 @@ describe('SigmaControllerV1.sol', async () => {
           return 0;
         });
       }
+      if (setRecipient) {
+        await controller.connect(governance).setDefaultExitFeeRecipient(feeRecipient);
+      }
       if (category) await setupCategory(useFullyDiluted, useSqrt);
-      if (pool) await setupPool(size, ethValue, useSqrt);
+      if (pool) await setupPool(size, ethValue);
       if (init) await finishInitializer();
-      [,,notOwner] = await ethers.getSigners();
     });
   }
 
@@ -229,10 +236,10 @@ describe('SigmaControllerV1.sol', async () => {
     expect(await tokenSeller.getPremiumPercent()).to.eq(defaultPremium);
   }
 
-  const setupPool = async (size = 5, ethValue = 1) => {
+  const setupPool = async (size = 5, ethValue = 1, id = 1) => {
     poolSize = size;
-    if ((await controller.tokenListCount()).eq(0)) await setupCategory();
-    const { events } = await controller.prepareIndexPool(1, size, toWei(ethValue), 'Test Index Pool', 'TIP').then(tx => tx.wait());
+    if ((await controller.tokenListCount()).eq(0)) id = await setupCategory();
+    const { events } = await controller.prepareIndexPool(id, size, toWei(ethValue), 'Test Index Pool', 'TIP').then(tx => tx.wait());
     const { args: { pool: poolAddress, initializer: initializerAddress } } = events.filter(e => e.event == 'NewPoolInitializer')[0];
     pool = await ethers.getContractAt('SigmaIndexPoolV1', poolAddress);
     initializer = await ethers.getContractAt('SigmaPoolInitializerV1', initializerAddress);
@@ -240,7 +247,7 @@ describe('SigmaControllerV1.sol', async () => {
   }
 
   describe('Initializer & Settings', async () => {
-    setupTests();
+    setupTests({ setRecipient: false });
 
     it('defaultSellerPremium(): set to 2', async () => {
       const premium = await controller.defaultSellerPremium();
@@ -254,6 +261,14 @@ describe('SigmaControllerV1.sol', async () => {
     it('circuitBreaker()', async () => {
       expect(await controller.circuitBreaker()).to.eq(await circuitBreaker.getAddress());
     })
+
+    it('defaultExitFeeRecipient()', async () => {
+      expect(await controller.defaultExitFeeRecipient()).to.eq(`0x${'00'.repeat(20)}`);
+    })
+
+    it('governance()', async () => {
+      expect(await controller.governance()).to.eq(await governance.getAddress());
+    })
   });
 
   describe('onlyOwner', async () => {
@@ -264,7 +279,6 @@ describe('SigmaControllerV1.sol', async () => {
         'prepareIndexPool',
         'setDefaultSellerPremium',
         'updateSellerPremium',
-        'setSwapFee',
         'delegateCompLikeTokenFromPool',
         'setCircuitBreaker'
       ];
@@ -279,7 +293,14 @@ describe('SigmaControllerV1.sol', async () => {
 
     it('All functions with isInitializedPool modifier revert if pool address not recognized', async () => {
       // reweighPool & reindexPool included even though there is no modifier because it uses the same validation
-      const onlyOwnerFns = ['setSwapFee', 'updateMinimumBalance', 'reweighPool', 'reindexPool', 'setPublicSwap', 'delegateCompLikeTokenFromPool'];
+      const onlyOwnerFns = [
+        'updateMinimumBalance',
+        'reweighPool',
+        'reindexPool',
+        'setPublicSwap',
+        'delegateCompLikeTokenFromPool',
+        'setController'
+    ];
       for (let fn of onlyOwnerFns) {
         await verifyRejection(ownerFaker, fn, /ERR_POOL_NOT_FOUND/g);
       }
@@ -301,8 +322,148 @@ describe('SigmaControllerV1.sol', async () => {
     })
   })
 
+  describe('setDefaultExitFeeRecipient()', () => {
+    setupTests({ setRecipient: false });
+
+    it('Reverts if not called by governance', async () => {
+      await verifyRejection(controller, 'setDefaultExitFeeRecipient', /ERR_NOT_GOVERNANCE/g, zeroAddress);
+    })
+
+    it('Reverts if address is zero', async () => {
+      await verifyRejection(controller.connect(governance), 'setDefaultExitFeeRecipient', /ERR_NULL_ADDRESS/g, zeroAddress);
+    })
+
+    it('Sets default exit fee recipient', async () => {
+      await controller.connect(governance).setDefaultExitFeeRecipient(feeRecipient);
+      expect(await controller.defaultExitFeeRecipient()).to.eq(feeRecipient)
+    })
+  })
+
+  describe('setExitFeeRecipient(address,address)', () => {
+    setupTests({ pool: true, init: true, size: 5, ethValue: 1, useFullyDiluted: true, useSqrt: true });
+
+    it('Reverts if not owner', async () => {
+      await verifyRejection(
+        controller,
+        'setExitFeeRecipient(address,address)',
+        /ERR_NOT_GOVERNANCE/g,
+        pool.address, zeroAddress
+      );
+    })
+
+    it('Reverts if pool does not exist', async () => {
+      await verifyRejection(
+        controller.connect(governance),
+        'setExitFeeRecipient(address,address)',
+        /ERR_POOL_NOT_FOUND/g,
+        zeroAddress, zeroAddress
+      );
+    })
+
+    it('Sets exit fee recipient on pool', async () => {
+      const recipient = `0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF`;
+      await controller.connect(governance)['setExitFeeRecipient(address,address)'](pool.address, recipient);
+      expect(await pool.getExitFeeRecipient()).to.eq(recipient);
+    })
+  })
+
+  describe('setExitFeeRecipient(address[],address)', () => {
+    setupTests({ pool: true, init: true, size: 5, ethValue: 1, useFullyDiluted: true, useSqrt: true });
+
+    it('Reverts if not owner', async () => {
+      await verifyRejection(
+        await controller,
+        'setExitFeeRecipient(address[],address)',
+        /ERR_NOT_GOVERNANCE/g,
+        [pool.address], zeroAddress
+      )
+    })
+
+    it('Reverts if any of the pools do not exist', async () => {
+      await verifyRejection(
+        controller.connect(governance),
+        'setExitFeeRecipient(address[],address)',
+        /ERR_POOL_NOT_FOUND/g,
+        [zeroAddress], `0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF`
+      );
+    })
+
+    it('Sets exit fee recipient on pools', async () => {
+      const recipient = `0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF`;
+      const pool1 = pool.address;
+      await setupCategory()
+      const { poolAddress: pool2 } = await setupPool(5, 1, 2);
+      await finishInitializer()
+      await controller.connect(governance)['setExitFeeRecipient(address[],address)']([pool1, pool2], recipient);
+      expect(await (await ethers.getContractAt('IIndexPool', pool1)).getExitFeeRecipient()).to.eq(recipient);
+      expect(await (await ethers.getContractAt('IIndexPool', pool2)).getExitFeeRecipient()).to.eq(recipient);
+    })
+  })
+
+  describe('setSwapFee(address,uint256)', async () => {
+    setupTests({ pool: true, init: true, size: 5, ethValue: 1, useFullyDiluted: true, useSqrt: true });
+
+    it('Reverts if not owner', async () => {
+      await verifyRejection(
+        await controller,
+        'setSwapFee(address,uint256)',
+        /ERR_NOT_GOVERNANCE/g,
+        pool.address, 0
+      )
+    })
+
+    it('Reverts if any of the pools do not exist', async () => {
+      await verifyRejection(
+        controller.connect(governance),
+        'setSwapFee(address,uint256)',
+        /ERR_POOL_NOT_FOUND/g,
+        zeroAddress, 0
+      );
+    })
+
+    it('Sets swap fee on the pool', async () => {
+      const fee = toWei('0.01');
+      await controller.connect(governance)['setSwapFee(address,uint256)'](pool.address, fee);
+      const newFee = await pool.getSwapFee();
+      expect(newFee.eq(fee)).to.be.true;
+    });
+  });
+
+  describe('setSwapFee(address[],uint256)', async () => {
+    setupTests({ pool: true, init: true, size: 5, ethValue: 1, useFullyDiluted: true, useSqrt: true });
+
+    it('Reverts if not governance', async () => {
+      await verifyRejection(
+        await controller,
+        'setSwapFee(address[],uint256)',
+        /ERR_NOT_GOVERNANCE/g,
+        [pool.address], 0
+      )
+    })
+
+    it('Reverts if any of the pools do not exist', async () => {
+      await verifyRejection(
+        controller.connect(governance),
+        'setSwapFee(address[],uint256)',
+        /ERR_POOL_NOT_FOUND/g,
+        [zeroAddress], 0
+      );
+    })
+
+    it('Sets swap fee on the pool', async () => {
+      const pool1 = pool.address;
+      await setupCategory(true, true)
+      const { poolAddress: pool2 } = await setupPool(5, 1, 2);
+      await finishInitializer()
+      const fee = toWei('0.01');
+      await controller.connect(governance)['setSwapFee(address[],uint256)']([pool1, pool2], fee);
+      expect((await (await ethers.getContractAt('IIndexPool', pool1)).getSwapFee()).eq(fee)).to.be.true;
+      expect((await (await ethers.getContractAt('IIndexPool', pool2)).getSwapFee()).eq(fee)).to.be.true;
+    });
+  });
+
   describe('setPublicSwap()', async () => {
-    setupTests({ init: true, pool: true, size: 5, ethValue: toWei(10) });
+    setupTests({ pool: true, init: true, size: 5, ethValue: 1, useFullyDiluted: true, useSqrt: true });
 
     it('Reverts if not owner or circuit breaker', async () => {
       await verifyRejection(controller.connect(notOwner), 'setPublicSwap', /ERR_NOT_AUTHORIZED/g, pool.address, false);
@@ -503,16 +664,18 @@ describe('SigmaControllerV1.sol', async () => {
     });
   });
 
-  describe('setSwapFee()', async () => {
+  describe('setController()', async () => {
     setupTests({ pool: true, init: true, size: 2, ethValue: 1 });
 
-    it('Sets swap fee on the pool', async () => {
-      const fee = toWei('0.01');
-      await controller.setSwapFee(pool.address, fee);
-      const newFee = await pool.getSwapFee();
-      expect(newFee.eq(fee)).to.be.true;
-    });
-  });
+    it('Reverts if not called by governance', async () => {
+      await verifyRejection(controller, 'setController', /ERR_NOT_GOVERNANCE/g, pool.address, `0x${'11'.repeat(20)}`);
+    })
+
+    it('Sets controller on the pool', async () => {
+      await controller.connect(governance).setController(pool.address, `0x${'11'.repeat(20)}`);
+      expect(await pool.getController()).to.eq(`0x${'11'.repeat(20)}`);
+    })
+  })
 
   describe('reweighPool()', async () => {
     describe('Sqrt Fully Diluted Market Cap', async () => {
@@ -559,7 +722,7 @@ describe('SigmaControllerV1.sol', async () => {
       });
   
       it('Reweighs the pool and sets desired weights proportional to mcap sqrts', async () => {
-        await prepareReweigh(true);
+        await prepareReweigh(true, true);
         const expectedWeights = await getExpectedDenorms(5, true, false);
         await controller.reweighPool(pool.address);
         for (let i = 0; i < 5; i++) {
@@ -584,7 +747,7 @@ describe('SigmaControllerV1.sol', async () => {
     })
 
     describe('Sqrt Circulating Market Cap', async () => {
-      setupTests({ pool: true, init: true, category: true, size: 5, ethValue: 1, useFullyDiluted: false, useSqrt: true });
+      setupTests({ category: true, pool: true, init: true, size: 5, ethValue: 1, useFullyDiluted: false, useSqrt: true });
   
       it('Reverts if < 2 weeks have passed', async () => {
         await verifyRevert('reindexPool', /ERR_POOL_REWEIGH_DELAY/g, pool.address);
@@ -616,7 +779,7 @@ describe('SigmaControllerV1.sol', async () => {
     })
 
     describe('Proportional Circulating Market Cap', async () => {
-      setupTests({ pool: true, init: true, category: true, size: 5, ethValue: 1, useFullyDiluted: false, useSqrt: false });
+      setupTests({ category: true, pool: true, init: true, category: true, size: 5, ethValue: 1, useFullyDiluted: false, useSqrt: false });
   
       it('Reverts if < 2 weeks have passed', async () => {
         await verifyRevert('reindexPool', /ERR_POOL_REWEIGH_DELAY/g, pool.address);

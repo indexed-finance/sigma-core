@@ -10,7 +10,7 @@ async function deploy(contractName, ...args) {
   return Factory.deploy(...args);
 }
 
-describe('MarketCapSortedTokenCategories.sol', () => {
+describe('SortedTokenLists.sol', () => {
   let tokens, wrappedTokens, oracle;
   let addLiquidityAll, addLiquidity, deployTokenAndMarket;
   let circulatingCapOracle, liquidityManager;
@@ -54,7 +54,7 @@ describe('MarketCapSortedTokenCategories.sol', () => {
     } else {
       scoringStrategy = await deploy('ScoreByCMC', circulatingCapOracle.address);
     }
-    tokenLists.createTokenList(`0x${'ff'.repeat(32)}`, scoringStrategy.address, minScore, maxScore);
+    await tokenLists.createTokenList(`0x${'ff'.repeat(32)}`, scoringStrategy.address, minScore, maxScore);
   }
 
   const deployTestToken = async (liqA = 1, liqB = 1) => {
@@ -412,6 +412,7 @@ describe('MarketCapSortedTokenCategories.sol', () => {
       })
 
       it('Returns token market caps', async () => {
+        await fastForward(3600 * 48);
         await addLiquidityAll();
         await fastForward(3600 * 48);
         const _tokens = wrappedTokens.map(t => t.address);

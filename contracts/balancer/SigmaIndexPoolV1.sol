@@ -22,60 +22,6 @@ Subject to the GPL-3.0 license
 
 
 contract SigmaIndexPoolV1 is BToken, BMath, IIndexPool {
-
-/* ==========  EVENTS  ========== */
-
-  /** @dev Emitted when tokens are swapped. */
-  event LOG_SWAP(
-    address indexed caller,
-    address indexed tokenIn,
-    address indexed tokenOut,
-    uint256 tokenAmountIn,
-    uint256 tokenAmountOut
-  );
-
-  /** @dev Emitted when underlying tokens are deposited for pool tokens. */
-  event LOG_JOIN(
-    address indexed caller,
-    address indexed tokenIn,
-    uint256 tokenAmountIn
-  );
-
-  /** @dev Emitted when pool tokens are burned for underlying. */
-  event LOG_EXIT(
-    address indexed caller,
-    address indexed tokenOut,
-    uint256 tokenAmountOut
-  );
-
-  /** @dev Emitted when a token's weight updates. */
-  event LOG_DENORM_UPDATED(address indexed token, uint256 newDenorm);
-
-  /** @dev Emitted when a token's desired weight is set. */
-  event LOG_DESIRED_DENORM_SET(address indexed token, uint256 desiredDenorm);
-
-  /** @dev Emitted when a token is unbound from the pool. */
-  event LOG_TOKEN_REMOVED(address token);
-
-  /** @dev Emitted when a token is unbound from the pool. */
-  event LOG_TOKEN_ADDED(
-    address indexed token,
-    uint256 desiredDenorm,
-    uint256 minimumBalance
-  );
-
-  /** @dev Emitted when a token's minimum balance is updated. */
-  event LOG_MINIMUM_BALANCE_UPDATED(address token, uint256 minimumBalance);
-
-  /** @dev Emitted when a token reaches its minimum balance. */
-  event LOG_TOKEN_READY(address indexed token);
-
-  /** @dev Emitted when public trades are disabled. */
-  event LOG_PUBLIC_SWAP_TOGGLED(bool enabled);
-
-  /** @dev Emitted when the swap fee is updated. */
-  event LOG_SWAP_FEE_UPDATED(uint256 swapFee);
-
 /* ==========  Modifiers  ========== */
 
   modifier _lock_ {
@@ -153,8 +99,8 @@ contract SigmaIndexPoolV1 is BToken, BMath, IIndexPool {
     require(_controller == address(0), "ERR_CONFIGURED");
     require(controller != address(0), "ERR_NULL_ADDRESS");
     _controller = controller;
-    // default fee is 2.5%
-    _swapFee = BONE / 40;
+    // default fee is 2%
+    _swapFee = BONE / 50;
     _initializeToken(name, symbol);
   }
 
@@ -230,6 +176,15 @@ contract SigmaIndexPoolV1 is BToken, BMath, IIndexPool {
   }
 
   /**
+   * @dev Set the controller address.
+   */
+  function setController(address controller) external override _control_ {
+    require(controller != address(0), "ERR_NULL_ADDRESS");
+    _controller = controller;
+    emit LOG_CONTROLLER_UPDATED(controller);
+  }
+
+  /**
    * @dev Delegate a comp-like governance token to an address
    * specified by the controller.
    */
@@ -242,12 +197,12 @@ contract SigmaIndexPoolV1 is BToken, BMath, IIndexPool {
   }
 
   /**
-   * @dev Set the exit fee recipient address. Can only be called
-   * by the current exit fee recipient.
+   * @dev Set the exit fee recipient address.
    */
-  function setExitFeeRecipient(address exitFeeRecipient) external override {
-    require(msg.sender == _exitFeeRecipient, "ERR_NOT_FEE_RECIPIENT");
+  function setExitFeeRecipient(address exitFeeRecipient) external override _control_ {
+    require(exitFeeRecipient != address(0), "ERR_NULL_ADDRESS");
     _exitFeeRecipient = exitFeeRecipient;
+    emit LOG_EXIT_FEE_RECIPIENT_UPDATED(exitFeeRecipient);
   }
 
   /**
@@ -752,17 +707,18 @@ contract SigmaIndexPoolV1 is BToken, BMath, IIndexPool {
     _pullUnderlying(tokenIn, msg.sender, tokenAmountIn);
     _pushUnderlying(tokenOut, msg.sender, tokenAmountOut);
 
-    realInBalance = badd(realInBalance, tokenAmountIn);
-    _updateInputToken(tokenIn, inRecord, realInBalance);
-    if (inRecord.ready) {
-      inRecord.balance = realInBalance;
-    }
     // Update the in-memory record for the spotPriceAfter calculation,
     // then update the storage record with the local balance.
     outRecord.balance = bsub(outRecord.balance, tokenAmountOut);
     _records[tokenOut].balance = outRecord.balance;
     // If needed, update the output token's weight.
     _decreaseDenorm(outRecord, tokenOut);
+
+    realInBalance = badd(realInBalance, tokenAmountIn);
+    _updateInputToken(tokenIn, inRecord, realInBalance);
+    if (inRecord.ready) {
+      inRecord.balance = realInBalance;
+    }
 
     uint256 spotPriceAfter = calcSpotPrice(
       inRecord.balance,
@@ -842,18 +798,19 @@ contract SigmaIndexPoolV1 is BToken, BMath, IIndexPool {
     _pullUnderlying(tokenIn, msg.sender, tokenAmountIn);
     _pushUnderlying(tokenOut, msg.sender, tokenAmountOut);
 
-    // Update the balance and (if necessary) weight of the input token.
-    realInBalance = badd(realInBalance, tokenAmountIn);
-    _updateInputToken(tokenIn, inRecord, realInBalance);
-    if (inRecord.ready) {
-      inRecord.balance = realInBalance;
-    }
     // Update the in-memory record for the spotPriceAfter calculation,
     // then update the storage record with the local balance.
     outRecord.balance = bsub(outRecord.balance, tokenAmountOut);
     _records[tokenOut].balance = outRecord.balance;
     // If needed, update the output token's weight.
     _decreaseDenorm(outRecord, tokenOut);
+
+    // Update the balance and (if necessary) weight of the input token.
+    realInBalance = badd(realInBalance, tokenAmountIn);
+    _updateInputToken(tokenIn, inRecord, realInBalance);
+    if (inRecord.ready) {
+      inRecord.balance = realInBalance;
+    }
 
     uint256 spotPriceAfter = calcSpotPrice(
       inRecord.balance,
@@ -885,6 +842,10 @@ contract SigmaIndexPoolV1 is BToken, BMath, IIndexPool {
 
   function getSwapFee() external view override _viewlock_ returns (uint256/* swapFee */) {
     return _swapFee;
+  }
+
+  function getExitFee() external view override _viewlock_ returns (uint256/* exitFee */) {
+    return EXIT_FEE;
   }
 
   /**
@@ -1250,8 +1211,10 @@ contract SigmaIndexPoolV1 is BToken, BMath, IIndexPool {
       denorm = uint96(badd(oldWeight, maxDiff));
       diff = maxDiff;
     }
-    _totalWeight = badd(_totalWeight, diff);
-    require(_totalWeight <= MAX_TOTAL_WEIGHT, "ERR_MAX_TOTAL_WEIGHT");
+    // If new total weight exceeds the maximum, do not update
+    uint256 newTotalWeight = badd(_totalWeight, diff);
+    if (newTotalWeight > MAX_TOTAL_WEIGHT) return;
+    _totalWeight = newTotalWeight;
     // Update the in-memory denorm value for spot-price computations.
     record.denorm = denorm;
     // Update the storage record

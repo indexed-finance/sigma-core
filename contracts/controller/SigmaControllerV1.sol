@@ -71,8 +71,8 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
   // Proxy manager & factory
   IDelegateCallProxyManager public immutable proxyManager;
 
-  // Exit fee recipient for the index pools
-  address public immutable defaultExitFeeRecipient;
+  // Governance address
+  address public immutable governance;
 
 /* ==========  Events  ========== */
 
@@ -91,6 +91,12 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
     uint256 listID,
     uint256 indexSize
   );
+
+  /** @dev Emitted when a pool is reweighed. */
+  event PoolReweighed(address pool);
+
+  /** @dev Emitted when a pool is reindexed. */
+  event PoolReindexed(address pool);
 
 /* ==========  Structs  ========== */
 
@@ -139,6 +145,9 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
   // Address able to halt swaps
   address public circuitBreaker;
 
+  // Exit fee recipient for the index pools
+  address public defaultExitFeeRecipient;
+
 /* ========== Modifiers ========== */
 
   modifier isInitializedPool(address poolAddress) {
@@ -157,6 +166,11 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
     _;
   }
 
+  modifier onlyGovernance() {
+    require(msg.sender == governance, "ERR_NOT_GOVERNANCE");
+    _;
+  }
+
 /* ==========  Constructor  ========== */
 
   /**
@@ -167,14 +181,14 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
     IIndexedUniswapV2Oracle uniswapOracle_,
     IPoolFactory poolFactory_,
     IDelegateCallProxyManager proxyManager_,
-    address defaultExitFeeRecipient_
+    address governance_
   )
     public
     ScoredTokenLists(uniswapOracle_)
   {
     poolFactory = poolFactory_;
     proxyManager = proxyManager_;
-    defaultExitFeeRecipient = defaultExitFeeRecipient_;
+    governance = governance_;
   }
 
 /* ==========  Initializer  ========== */
@@ -204,6 +218,14 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
    */
   function setCircuitBreaker(address circuitBreaker_) external onlyOwner {
     circuitBreaker = circuitBreaker_;
+  }
+
+  /**
+   * @dev Sets the default exit fee recipient for new pools.
+   */
+  function setDefaultExitFeeRecipient(address defaultExitFeeRecipient_) external onlyGovernance {
+    require(defaultExitFeeRecipient_ != address(0), "ERR_NULL_ADDRESS");
+    defaultExitFeeRecipient = defaultExitFeeRecipient_;
   }
 
 /* ==========  Pool Deployment  ========== */
@@ -342,10 +364,48 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
   }
 
   /**
+   * @dev Sets the controller on an index pool.
+   */
+  function setController(address poolAddress, address controller) external isInitializedPool(poolAddress) onlyGovernance {
+    IIndexPool(poolAddress).setController(controller);
+  }
+
+  /**
+   * @dev Sets the exit fee recipient for an existing pool.
+   */
+  function setExitFeeRecipient(address poolAddress, address exitFeeRecipient) external isInitializedPool(poolAddress) onlyGovernance {
+    IIndexPool(poolAddress).setExitFeeRecipient(exitFeeRecipient);
+  }
+
+  /**
+   * @dev Sets the exit fee recipient on multiple existing pools.
+   */
+  function setExitFeeRecipient(address[] calldata poolAddresses, address exitFeeRecipient) external onlyGovernance {
+    for (uint256 i = 0; i < poolAddresses.length; i++) {
+      address poolAddress = poolAddresses[i];
+      require(indexPoolMetadata[poolAddress].initialized, "ERR_POOL_NOT_FOUND");
+      // No not-null requirement - already in pool function.
+      IIndexPool(poolAddress).setExitFeeRecipient(exitFeeRecipient);
+    }
+  }
+
+  /**
+   * @dev Sets the swap fee on multiple index pools.
+   */
+  function setSwapFee(address poolAddress, uint256 swapFee) external onlyGovernance isInitializedPool(poolAddress) {
+    IIndexPool(poolAddress).setSwapFee(swapFee);
+  }
+
+  /**
    * @dev Sets the swap fee on an index pool.
    */
-  function setSwapFee(address poolAddress, uint256 swapFee) external onlyOwner isInitializedPool(poolAddress) {
-    IIndexPool(poolAddress).setSwapFee(swapFee);
+  function setSwapFee(address[] calldata poolAddresses, uint256 swapFee) external onlyGovernance {
+    for (uint256 i = 0; i < poolAddresses.length; i++) {
+      address poolAddress = poolAddresses[i];
+      require(indexPoolMetadata[poolAddress].initialized, "ERR_POOL_NOT_FOUND");
+      // No not-null requirement - already in pool function.
+      IIndexPool(poolAddress).setSwapFee(swapFee);
+    }
   }
 
   /**
@@ -446,6 +506,7 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
       denormalizedWeights,
       minimumBalances
     );
+    emit PoolReindexed(poolAddress);
   }
 
   /**
@@ -475,6 +536,7 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
     meta.lastReweigh = uint64(now);
     indexPoolMetadata[poolAddress] = meta;
     IIndexPool(poolAddress).reweighTokens(tokens, denormalizedWeights);
+    emit PoolReweighed(poolAddress);
   }
 
 /* ==========  Pool Queries  ========== */

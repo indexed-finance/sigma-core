@@ -24,6 +24,9 @@ interface IIndexPool {
     uint256 balance;
   }
 
+/* ==========  EVENTS  ========== */
+
+  /** @dev Emitted when tokens are swapped. */
   event LOG_SWAP(
     address indexed caller,
     address indexed tokenIn,
@@ -32,39 +35,53 @@ interface IIndexPool {
     uint256 tokenAmountOut
   );
 
+  /** @dev Emitted when underlying tokens are deposited for pool tokens. */
   event LOG_JOIN(
     address indexed caller,
     address indexed tokenIn,
     uint256 tokenAmountIn
   );
 
+  /** @dev Emitted when pool tokens are burned for underlying. */
   event LOG_EXIT(
     address indexed caller,
     address indexed tokenOut,
     uint256 tokenAmountOut
   );
 
+  /** @dev Emitted when a token's weight updates. */
   event LOG_DENORM_UPDATED(address indexed token, uint256 newDenorm);
 
+  /** @dev Emitted when a token's desired weight is set. */
   event LOG_DESIRED_DENORM_SET(address indexed token, uint256 desiredDenorm);
 
+  /** @dev Emitted when a token is unbound from the pool. */
   event LOG_TOKEN_REMOVED(address token);
 
+  /** @dev Emitted when a token is unbound from the pool. */
   event LOG_TOKEN_ADDED(
     address indexed token,
     uint256 desiredDenorm,
     uint256 minimumBalance
   );
 
+  /** @dev Emitted when a token's minimum balance is updated. */
   event LOG_MINIMUM_BALANCE_UPDATED(address token, uint256 minimumBalance);
 
+  /** @dev Emitted when a token reaches its minimum balance. */
   event LOG_TOKEN_READY(address indexed token);
 
-  event LOG_PUBLIC_SWAP_TOGGLED(bool enabled);
+  /** @dev Emitted when public trades are enabled or disabled. */
+  event LOG_PUBLIC_SWAP_TOGGLED(bool isPublic);
 
-  event LOG_MAX_TOKENS_UPDATED(uint256 maxPoolTokens);
-
+  /** @dev Emitted when the swap fee is updated. */
   event LOG_SWAP_FEE_UPDATED(uint256 swapFee);
+
+  /** @dev Emitted when exit fee recipient is updated. */
+  event LOG_EXIT_FEE_RECIPIENT_UPDATED(address exitFeeRecipient);
+
+  /** @dev Emitted when controller is updated. */
+  event LOG_CONTROLLER_UPDATED(address exitFeeRecipient);
 
   function configure(
     address controller,
@@ -82,6 +99,8 @@ interface IIndexPool {
   ) external;
 
   function setSwapFee(uint256 swapFee) external;
+
+  function setController(address controller) external;
 
   function delegateCompLikeToken(address token, address delegatee) external;
 
@@ -152,6 +171,8 @@ interface IIndexPool {
   function isPublicSwap() external view returns (bool);
 
   function getSwapFee() external view returns (uint256/* swapFee */);
+
+  function getExitFee() external view returns (uint256/* exitFee */);
 
   function getController() external view returns (address);
 
