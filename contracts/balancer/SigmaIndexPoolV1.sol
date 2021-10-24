@@ -313,6 +313,8 @@ contract SigmaIndexPoolV1 is BToken, BMath, IIndexPool {
     Record storage record = _records[token];
     require(record.bound, "ERR_NOT_BOUND");
     require(!record.ready, "ERR_READY");
+    require(now - record.lastDenormUpdate >= MIN_BAL_UPDATE_DELAY, "MIN_BAL_UPDATE_DELAY");
+    record.lastDenormUpdate = uint40(now);
     _minimumBalances[token] = minimumBalance;
     emit LOG_MINIMUM_BALANCE_UPDATED(token, minimumBalance);
   }
@@ -1097,7 +1099,7 @@ contract SigmaIndexPoolV1 is BToken, BMath, IIndexPool {
     _records[token] = Record({
       bound: true,
       ready: false,
-      lastDenormUpdate: 0,
+      lastDenormUpdate: uint40(now),
       denorm: 0,
       desiredDenorm: desiredDenorm,
       index: uint8(_tokens.length),
