@@ -628,9 +628,8 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
 /* ==========  Internal Pool Utility Functions  ========== */
 
   /**
-   * @dev Estimate the total value of a pool by taking its first token's
-   * "virtual balance" (balance * (totalWeight/weight)) and multiplying
-   * by that token's average ether price from UniSwap.
+   * @dev Estimate the total value of a pool by taking the sum of
+   * TWAP values of the pool's balance in each token it has bound.
    */
   function _estimatePoolValue(address pool) internal view returns (uint256 totalValue) {
     address[] memory tokens = IIndexPool(pool).getCurrentTokens();
