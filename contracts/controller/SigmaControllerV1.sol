@@ -4,6 +4,7 @@ pragma experimental ABIEncoderV2;
 
 /* ========== External Interfaces ========== */
 import "@indexed-finance/proxies/contracts/interfaces/IDelegateCallProxyManager.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /* ========== External Libraries ========== */
 import "@indexed-finance/proxies/contracts/SaltyLib.sol";
@@ -631,13 +632,18 @@ contract SigmaControllerV1 is ScoredTokenLists, ControllerConstants {
    * "virtual balance" (balance * (totalWeight/weight)) and multiplying
    * by that token's average ether price from UniSwap.
    */
-  function _estimatePoolValue(address pool) internal view returns (uint256) {
-    (address token, uint256 value) = IIndexPool(pool).extrapolatePoolValueFromToken();
-    return uniswapOracle.computeAverageEthForTokens(
-      token,
-      value,
+  function _estimatePoolValue(address pool) internal view returns (uint256 totalValue) {
+    address[] memory tokens = IIndexPool(pool).getCurrentTokens();
+    uint256 len = tokens.length;
+    uint256[] memory balances = new uint256[](len);
+    for (uint256 i; i < len; i++) balances[i] = IERC20(tokens[i]).balanceOf(address(pool));
+    uint256[] memory ethValues = uniswapOracle.computeAverageEthForTokens(
+      tokens,
+      balances,
       SHORT_TWAP_MIN_TIME_ELAPSED,
       SHORT_TWAP_MAX_TIME_ELAPSED
     );
+    // Safe math is not needed because we are taking the sum of an array of uint144s as a uint256.
+    for (uint256 i; i < len; i++) totalValue += ethValues[i];
   }
 }
