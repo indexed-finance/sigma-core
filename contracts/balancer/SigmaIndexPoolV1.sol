@@ -637,6 +637,7 @@ contract SigmaIndexPoolV1 is BToken, BMath, IIndexPool {
           uint256 additionalBalance = bsub(balance, minimumBalance);
           uint256 balRatio = bdiv(additionalBalance, minimumBalance);
           uint96 newDenorm = uint96(badd(MIN_WEIGHT, bmul(MIN_WEIGHT, balRatio)));
+          if (newDenorm > 2 * MIN_WEIGHT) newDenorm = uint96(2 * MIN_WEIGHT);
           record.denorm = newDenorm;
           record.lastDenormUpdate = uint40(now);
           _totalWeight = badd(_totalWeight, newDenorm);
@@ -1266,6 +1267,7 @@ contract SigmaIndexPoolV1 is BToken, BMath, IIndexPool {
         uint256 additionalBalance = bsub(realBalance, record.balance);
         uint256 balRatio = bdiv(additionalBalance, record.balance);
         record.denorm = uint96(badd(MIN_WEIGHT, bmul(MIN_WEIGHT, balRatio)));
+        if (record.denorm > 2 * MIN_WEIGHT) record.denorm = uint96(2 * MIN_WEIGHT);
         _records[token].denorm = record.denorm;
         _records[token].lastDenormUpdate = uint40(now);
         _totalWeight = badd(_totalWeight, record.denorm);
