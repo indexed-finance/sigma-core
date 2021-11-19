@@ -308,6 +308,7 @@ contract SigmaIndexPoolV1 is BToken, BMath, IIndexPool {
   )
     external
     override
+    _lock_
     _control_
   {
     Record storage record = _records[token];
