@@ -23,6 +23,17 @@ describe('SigmaControllerV1.sol', async () => {
   let circulatingCapOracle;
   let fdvScoring, fdvSqrtScoring, cmcScoring, cmcSqrtScoring;
 
+  async function getTotalValue() {
+    let totalValue = BigNumber.from(0);
+    const _tokens = await pool.getCurrentTokens()
+    for (const token of _tokens) {
+      const balance = await pool.getBalance(token);
+      const value = liquidityManager.getTokenValue(token.toLowerCase(), balance);
+      totalValue = totalValue.add(value);
+    }
+    return totalValue;
+  }
+
   const setupTests = (options = {}) => {
 
     before(async () => {
@@ -835,9 +846,8 @@ describe('SigmaControllerV1.sol', async () => {
         const willBeIncluded = sortedWrappedTokens[5].address;
         await sortTokens(true);
         await controller.reindexPool(pool.address);
-        const [token0, value0] = await pool.extrapolatePoolValueFromToken();
-        const ethValue = liquidityManager.getTokenValue(token0, value0);
-        const expectedMinimumBalance = liquidityManager.getEthValue(willBeIncluded, ethValue).div(100);
+        let totalValue = await getTotalValue();
+        const expectedMinimumBalance = liquidityManager.getEthValue(willBeIncluded, totalValue).div(100);
         const actualMinimumBalance = await pool.getMinimumBalance(willBeIncluded);
         expect(actualMinimumBalance.eq(expectedMinimumBalance)).to.be.true;
       });
@@ -878,9 +888,8 @@ describe('SigmaControllerV1.sol', async () => {
         const willBeIncluded = sortedWrappedTokens[5].address;
         await sortTokens();
         await controller.reindexPool(pool.address);
-        const [token0, value0] = await pool.extrapolatePoolValueFromToken();
-        const ethValue = liquidityManager.getTokenValue(token0, value0);
-        const expectedMinimumBalance = liquidityManager.getEthValue(willBeIncluded, ethValue).div(100);
+        let totalValue = await getTotalValue();
+        const expectedMinimumBalance = liquidityManager.getEthValue(willBeIncluded, totalValue).div(100);
         const actualMinimumBalance = await pool.getMinimumBalance(willBeIncluded);
         expect(actualMinimumBalance.eq(expectedMinimumBalance)).to.be.true;
       });
@@ -916,9 +925,8 @@ describe('SigmaControllerV1.sol', async () => {
         const willBeIncluded = sortedWrappedTokens[5].address;
         await sortTokens(false);
         await controller.reindexPool(pool.address);
-        const [token0, value0] = await pool.extrapolatePoolValueFromToken();
-        const ethValue = liquidityManager.getTokenValue(token0, value0);
-        const expectedMinimumBalance = liquidityManager.getEthValue(willBeIncluded, ethValue).div(100);
+        let totalValue = await getTotalValue();
+        const expectedMinimumBalance = liquidityManager.getEthValue(willBeIncluded, totalValue).div(100);
         const actualMinimumBalance = await pool.getMinimumBalance(willBeIncluded);
         expect(actualMinimumBalance.eq(expectedMinimumBalance)).to.be.true;
       });
@@ -948,9 +956,8 @@ describe('SigmaControllerV1.sol', async () => {
         const willBeIncluded = sortedWrappedTokens[5].address;
         await sortTokens(false);
         await controller.reindexPool(pool.address);
-        const [token0, value0] = await pool.extrapolatePoolValueFromToken();
-        const ethValue = liquidityManager.getTokenValue(token0, value0);
-        const expectedMinimumBalance = liquidityManager.getEthValue(willBeIncluded, ethValue).div(100);
+        let totalValue = await getTotalValue();
+        const expectedMinimumBalance = liquidityManager.getEthValue(willBeIncluded, totalValue).div(100);
         const actualMinimumBalance = await pool.getMinimumBalance(willBeIncluded);
         expect(actualMinimumBalance.eq(expectedMinimumBalance)).to.be.true;
       });
@@ -985,9 +992,8 @@ describe('SigmaControllerV1.sol', async () => {
       const willBeIncluded = sortedWrappedTokens[5].address;
       await sortTokens(true);
       await controller.forceReindexPool(pool.address);
-      const [token0, value0] = await pool.extrapolatePoolValueFromToken();
-      const ethValue = liquidityManager.getTokenValue(token0, value0);
-      const expectedMinimumBalance = liquidityManager.getEthValue(willBeIncluded, ethValue).div(100);
+      let totalValue = await getTotalValue();
+      const expectedMinimumBalance = liquidityManager.getEthValue(willBeIncluded, totalValue).div(100);
       const actualMinimumBalance = await pool.getMinimumBalance(willBeIncluded);
       expect(actualMinimumBalance.eq(expectedMinimumBalance)).to.be.true;
     });
@@ -1032,16 +1038,26 @@ describe('SigmaControllerV1.sol', async () => {
       await sortedWrappedTokens[4].token.getFreeTokens(from, liquidityManager.getEthValue(willBeIncluded, toWei(1e7)));
       await sortTokens();
       await controller.reindexPool(pool.address);
-      let [token0, value0] = await pool.extrapolatePoolValueFromToken();
-      let ethValue = liquidityManager.getTokenValue(token0, value0);
-      let previousMinimum = liquidityManager.getEthValue(willBeIncluded, ethValue).div(100);
-      const _token0 = await ethers.getContractAt('MockERC20', token0);
-      await _token0.getFreeTokens(pool.address, value0.div(50));
-      await pool.gulp(token0);
-      [token0, value0] = await pool.extrapolatePoolValueFromToken();
-      ethValue = liquidityManager.getTokenValue(token0, value0);
+      // let [token0, value0] = await pool.extrapolatePoolValueFromToken();
+      // let ethValue = liquidityManager.getTokenValue(token0, value0);
+      // let previousMinimum = liquidityManager.getEthValue(willBeIncluded, ethValue).div(100);
+      // const _token0 = await ethers.getContractAt('MockERC20', token0);
+      // await _token0.getFreeTokens(pool.address, value0.div(50));
+      // await pool.gulp(token0);
+      // [token0, value0] = await pool.extrapolatePoolValueFromToken();
+      // ethValue = liquidityManager.getTokenValue(token0, value0);
+      let totalValue = await getTotalValue()
+
+      let previousMinimum = liquidityManager.getEthValue(willBeIncluded, totalValue).div(100);
+      const token0 = sortedWrappedTokens[0].token;
+      const addAmount = (await token0.balanceOf(pool.address)).div(10);
+      await token0.getFreeTokens(pool.address, addAmount)
+      const addValue = liquidityManager.getTokenValue(token0.address.toLowerCase(), addAmount);
+      await fastForward(3600 * 7)
+
       await controller.updateMinimumBalance(pool.address, willBeIncluded);
-      let expectedMinimumBalance = liquidityManager.getEthValue(willBeIncluded, ethValue).div(100);
+      let expectedMinimumBalance = liquidityManager.getEthValue(willBeIncluded, totalValue.add(addValue)).div(100);
+      // let expectedMinimumBalance = liquidityManager.getEthValue(willBeIncluded, ethValue).div(100);
       let actualMinimumBalance = await pool.getMinimumBalance(willBeIncluded);
       expect(actualMinimumBalance.gt(previousMinimum)).to.be.true;
       expect(+calcRelativeDiff(fromWei(expectedMinimumBalance), fromWei(actualMinimumBalance))).to.be.lte(errorDelta);
