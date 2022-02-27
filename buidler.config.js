@@ -85,6 +85,10 @@ module.exports = {
         "node_modules/@indexed-finance/proxies/deployments/rinkeby",
         "node_modules/@indexed-finance/uniswap-v2-oracle/deployments/rinkeby",
         "node_modules/@indexed-finance/uniswap-deployments/rinkeby"
+      ],
+      polygon: [
+        "node_modules/@indexed-finance/proxies/deployments/polygon",
+        "node_modules/@indexed-finance/uniswap-v2-oracle/deployments/polygon"
       ]
     }
   },
@@ -109,6 +113,11 @@ module.exports = {
     buidlerevm: {
       live: false,
       saveDeployment: false
+    },
+    polygon: {
+      url: `https://polygon-mainnet.g.alchemy.com/v2/${process.env.POLYGON_ALCHEMY_API_KEY}`,
+      accounts: [keys.mainnet],
+      chainId: 137
     },
     local: {
       url: url.format({
