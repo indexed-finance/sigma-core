@@ -1,0 +1,39 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "temp-contracts/interfaces/IScoringStrategy.sol": {
+      "content": "// SPDX-License-Identifier: GPL-3.0\npragma solidity ^0.6.0;\n\n\ninterface IScoringStrategy {\n  function getTokenScores(address[] calldata tokens) external view returns (uint256[] memory scores);\n}"
+    },
+    "temp-contracts/scoring/ScoreByFiveWaySplit.sol": {
+      "content": "// SPDX-License-Identifier: GPL-3.0\npragma solidity ^0.6.0;\n\nimport \"../interfaces/IScoringStrategy.sol\";\n\ncontract ScoreByFiveWaySplit is IScoringStrategy {\n  uint256 internal constant ONE = 1e18;\n\n  function getTokenScores(address[] calldata tokens)\n    external\n    view\n    override\n    returns (uint256[] memory scores)\n  {\n    require(tokens.length == 5, \"Must provide 5 tokens\");\n    scores = new uint256[](5);\n    scores[0] = ONE;\n    scores[1] = ONE;\n    scores[2] = ONE;\n    scores[3] = ONE;\n    scores[4] = ONE;\n  }\n}"
+    }
+  },
+  "settings": {
+    "metadata": {
+      "useLiteralContent": false
+    },
+    "optimizer": {
+      "enabled": true,
+      "runs": 200
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "abi",
+          "evm.bytecode",
+          "evm.deployedBytecode",
+          "evm.methodIdentifiers",
+          "metadata",
+          "devdoc",
+          "userdoc",
+          "storageLayout",
+          "evm.gasEstimates"
+        ],
+        "": [
+          "id",
+          "ast"
+        ]
+      }
+    }
+  }
+}
