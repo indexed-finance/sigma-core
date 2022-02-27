@@ -7,6 +7,7 @@
     "artifacts",
     "deployments/mainnet",
     "deployments/rinkeby",
+    "deployments/polygon",
     "contracts/balancer",
     "contracts/controller",
     "contracts/committee",
@@ -29,6 +30,7 @@
     "prepare:test": "yarn prepare-build --contracts MockERC20",
     "prepare:timelock": "yarn prepare-build --contracts CommitteeTimelock",
     "prepare:committee-proxy": "yarn prepare-build --contracts CommitteeProxy",
+    "prepare:score5": "yarn prepare-build --contracts ScoreByFiveWaySplit",
     "build": "buidler compile",
     "node": "buidler node",
     "coverage": "buidler coverage --network coverage --solcoverjs ./.solcover.js",
@@ -39,6 +41,7 @@
     "deploy:pool": "yarn prepare:pool && buidler deploy --tags SigmaIndexPoolV1 --network",
     "deploy:timelock": "yarn prepare:timelock && buidler deploy --tags CommitteeTimelock --network",
     "deploy:committee-proxy": "yarn prepare:committee-proxy && buidler deploy --tags CommitteeProxy --network",
+    "deploy:score5": "yarn prepare:score5 && buidler deploy --tags ScoreByFiveWaySplit --network",
     "test:pool": "buidler test ./test/test-pool.spec.js",
     "test:seller": "buidler test ./test/test-seller.spec.js",
     "test:categories": "buidler test ./test/test-categories.spec.js",
@@ -59,6 +62,8 @@
   "homepage": "https://github.com/indexed-finance/indexed-core#readme",
   "devDependencies": {
     "@ethersproject/providers": "^5.0.9",
+    "@indexed-finance/proxies": "^1.0.18",
+    "@indexed-finance/uniswap-v2-oracle": "^1.0.6",
     "@nomiclabs/buidler": "^1.4.3",
     "@nomiclabs/buidler-ethers": "^2.0.0",
     "@nomiclabs/buidler-etherscan": "^2.1.0",
@@ -92,9 +97,7 @@
     "web3": "^1.2.11"
   },
   "dependencies": {
-    "@indexed-finance/proxies": "^1.0.15",
     "@indexed-finance/uniswap-deployments": "^1.0.2",
-    "@indexed-finance/uniswap-v2-oracle": "^1.0.4",
     "@openzeppelin/contracts": "^3.2.0",
     "axios": "^0.20.0",
     "cids": "^1.0.0",
