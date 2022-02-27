@@ -124,7 +124,10 @@ async function expectEvent(receipt, eventName) {
   expect(events.find(e => e.event == eventName)).to.not.be.null;
 }
 
+const gwei = (n) => 1000000000 * n;
+
 module.exports = {
+  gwei,
   toBN,
   oneE18,
   expandTo18Decimals,
